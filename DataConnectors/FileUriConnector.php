@@ -64,11 +64,11 @@ class FileUriConnector extends AbstractUrlConnector
     }
     
     /**
-     * Set if the error that the requested file doesn't exist should be hidden or not. If no error should be shown the response body is empty.
-     * By default the error will be shown.
+     * Same es `error_if_file_not_found`
      * 
      * @uxon-property hide_file_missing_error
      * @uxon-type boolean
+     * @uxon-default false
      * 
      * @param bool $trueOrFalse
      * @return FileUriConnector
@@ -79,9 +79,23 @@ class FileUriConnector extends AbstractUrlConnector
         return $this;
     }
     
+    /**
+     * Set to FALSE to return empty data if file not found instead of throwing an error.
+     *
+     * @uxon-property error_if_file_not_found
+     * @uxon-type boolean
+     * @uxon-default true
+     *
+     * @param bool $value
+     * @return FileUriConnector
+     */
+    public function setErrorIfFileNotFound(bool $trueOrFalse) : FileUriConnector
+    {
+        return $this->setHideFileMissingError(! $trueOrFalse);
+    }
+    
     protected function getHideFileMissingError() : bool
     {
         return $this->hideFileMissingError ?: false;
     }
 }
-?>
