@@ -139,7 +139,7 @@ class HtmlUrlBuilder extends AbstractUrlBuilder
             return $result_rows_with_uid_keys;
         }
         
-        return $result_rows;
+        return $this->buildResultRowsResolvePlaceholders($result_rows, $query);
     }
 
     protected function performCalculationOnNode($expression, \DOMNode $node)

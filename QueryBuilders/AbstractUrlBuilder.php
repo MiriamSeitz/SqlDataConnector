@@ -55,6 +55,14 @@ use exface\Core\CommonLogic\QueryBuilder\QueryPartAttribute;
  * a query to `https://www.github.com/exface/`. This feature is very usefull in
  * web services, that do not return values of URL parameters in their response.
  * 
+ * - `[#~urlparam:<parameter>#]` - the value of an URL parameter in the current request.
+ * E.g. in a URL `http://mydomain/resource?param1=val1&param2=val2` the placeholders
+ * `[~urlparam:param1]` and `[~urlparam:param2]` can be used to get `val1` and `val2`
+ * respectively. This is similar to `[#~urlplaceholder:<placeholder_name>#]`, but
+ * can be used for any URL parameters - even those produced by filters, etc. On the
+ * other hand, `[#~urlplaceholder:<placeholder_name>#]` can be used to get any placeholder
+ * used, not only query parameters following the `?`.
+ * 
  * ## Data address properties
  * 
  * TODO
@@ -1073,6 +1081,46 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
      * @return array
      */
     protected abstract function buildResultRows($parsed_data, Psr7DataQuery $query);
+    
+    /**
+     * Resolves placeholders in data addresses, that refer to parts of the HTTP request or response.
+     * 
+     * @param array $dataRows
+     * @param Psr7DataQuery $query
+     * @throws QueryBuilderException
+     * @return array
+     */
+    protected function buildResultRowsResolvePlaceholders(array $dataRows, Psr7DataQuery $query) : array
+    {
+        foreach ($this->getAttributes() as $qpart) {
+            $addr = $qpart->getDataAddress();
+            if (substr($addr, 0, 2) === '[#') {
+                $placeholder = StringDataType::findPlaceholders($addr)[0];
+                list($ph, $modifier) = explode(':', $placeholder, 2);
+                $ph = mb_strtolower($ph);
+                switch (true) {
+                    case $ph === '~urlplaceholder':
+                        $val = $this->getUrlPlaceholderValue($modifier);
+                        break;
+                    case $ph === '~urlparam':
+                        $urlParams = [];
+                        parse_str($query->getRequest()->getUri()->getQuery(), $urlParams);
+                        $val = $urlParams[$modifier];
+                        break;
+                    default:
+                        // Throw an error if the placeholder is not known and the query part was not
+                        // handled somehow previously
+                        if (! array_key_exists($qpart->getColumnKey(), $dataRows[0])) {
+                            throw new QueryBuilderException('Unknown placeholder "' . $placeholder . '" in data address of attribute "' . $qpart->getAlias() . '"');
+                        }
+                }
+                foreach (array_keys($dataRows) as $i) {
+                    $dataRows[$i][$qpart->getColumnKey()] = $val;
+                }
+            }
+        }
+        return $dataRows;
+    }
 
     /**
      *
@@ -1490,7 +1538,7 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
     {
         $value = $this->urlPlaceholders[$placeholder][$this->getSubrequestNo()];
         if ($value === null) {
-            throw new QueryBuilderException('Placeholder "~urlplaceholders:' . $placeholder . '" not found!');
+            throw new QueryBuilderException('Placeholder "~urlplaceholders:' . $placeholder . '" cannot be resolved: no such placeholder was used in the URL!');
         }
         return $value;
     }

@@ -127,7 +127,7 @@ class XmlUrlBuilder extends AbstractUrlBuilder
      */
     protected function buildResultRows($parsed_data, Psr7DataQuery $query)
     {
-        return $parsed_data;
+        return $this->buildResultRowsResolvePlaceholders($parsed_data, $query);
     }
 
     /**

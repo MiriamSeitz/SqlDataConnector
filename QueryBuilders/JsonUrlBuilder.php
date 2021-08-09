@@ -260,7 +260,9 @@ class JsonUrlBuilder extends AbstractUrlBuilder
                     $result_row = array();
                     /* @var $qpart \exface\Core\CommonLogic\QueryBuilder\QueryPartSelect */
                     foreach ($this->getAttributes() as $qpart) {
-                        $result_row[$qpart->getColumnKey()] = $this->getValueFromRow($qpart, $row);
+                        if (! ($qpart->getDataAddress() && substr($qpart->getDataAddress(), 0, 2) === '[#')) {
+                            $result_row[$qpart->getColumnKey()] = $this->getValueFromRow($qpart, $row);
+                        }
                     }
                     if ($useUidForRowNumber === true) {
                         $result_rows[$result_row[$this->getMainObject()->getUidAttributeAlias()]] = $result_row;
@@ -275,18 +277,26 @@ class JsonUrlBuilder extends AbstractUrlBuilder
             $result_rows = array_values($result_rows);
         }
         
-        return $result_rows;
+        return $this->buildResultRowsResolvePlaceholders($result_rows, $query);
     }
     
+    /**
+     * 
+     * @param QueryPartAttribute $qpart
+     * @param array $row
+     * @return mixed|NULL
+     */
     protected function getValueFromRow(QueryPartAttribute $qpart, array $row)
     {
+        $path = $qpart->getDataAddress();
         switch (true) {
-            case $path = $qpart->getDataAddress():
-                if (substr($path, 0, 2) === '[#') {
-                    $val = $this->getValueFromPlaceholder(StringDataType::findPlaceholders($path)[0], $qpart);
-                } else {
-                    $val = $this->getValueFromRowViaXPath($qpart, $row, $path);
-                }
+            /* TODO Add JSON path support!
+            case substr($path, 0, 1) === '$':
+                $val = $this->getValueFromRowViaJsonPath($qpart, $row, $path);
+                break;
+            */
+            case $path !== null && $path !== '':
+                $val = $this->getValueFromRowViaXPath($qpart, $row, $path);
                 break;
             case ($qpartAttr = $qpart->getAttribute()) && $qpartAttr instanceof CompoundAttributeInterface:
                 $val = '';
@@ -301,17 +311,13 @@ class JsonUrlBuilder extends AbstractUrlBuilder
         return $val;
     }
     
-    protected function getValueFromPlaceholder(string $placeholder, QueryPartAttribute $qpart)
-    {
-        list($ph, $modifier) = explode(':', $placeholder, 2);
-        switch (true) {
-            case $ph === '~urlplaceholder':
-                return $this->getUrlPlaceholderValue($modifier);
-            default:
-                throw new QueryBuilderException('Unknown placeholder "' . $placeholder . '" in data address of attribute "' . $qpart->getAlias() . '"');
-        }
-    }
-    
+    /**
+     * 
+     * @param QueryPartAttribute $qpart
+     * @param array $row
+     * @param string $path
+     * @return unknown
+     */
     protected function getValueFromRowViaXPath(QueryPartAttribute $qpart, array $row, string $path)
     {
         $val = ArrayDataType::filterXPath($row, $path);
