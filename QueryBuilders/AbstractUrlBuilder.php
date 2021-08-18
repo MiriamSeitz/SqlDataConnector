@@ -157,6 +157,15 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
     const DAP_REQUEST_OFFSET_PARAMETER = 'request_offset_parameter';
     
     /**
+     * Name of the URL parameter containing the page for pagination
+     *
+     * @uxon-property request_page_parameter
+     * @uxon-target object
+     * @uxon-type string
+     */
+    const DAP_REQUEST_PAGE_PARAMETER = 'request_page_parameter';
+    
+    /**
      * Name of the URL parameter holding the maximum number of returned items
      * 
      * @uxon-property request_limit_parameter
@@ -1426,11 +1435,19 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
             return $params;
         }
         
-        if ($offsetParam = $this->buildUrlParamLimit($this->getMainObject())) {
-            $params = $this->addParameterToUrl($params, $offsetParam, $this->getLimit());
+        if ($limitParam = $this->buildUrlParamLimit($this->getMainObject())) {
+            $params = $this->addParameterToUrl($params, $limitParam, $this->getLimit());
         }
-        if ($limitParam = $this->buildUrlParamOffset($this->getMainObject())) {
-            $params = $this->addParameterToUrl($params, $limitParam, $this->getOffset());
+        if ($offsetParam = $this->buildUrlParamOffset($this->getMainObject())) {
+            $params = $this->addParameterToUrl($params, $offsetParam, $this->getOffset());
+        }
+        elseif (($pageParam = $this->buildUrlParamPage($this->getMainObject())) && $this->getLimit() !== 0) {
+            if ($this->getOffset() == 0) {
+                $value = 1;
+            } else {
+                $value = intval(round($this->getOffset() / $this->getLimit())) + 1;
+            }
+            $params = $this->addParameterToUrl($params, $pageParam, $value);
         }
         return $params;
     }
@@ -1438,6 +1455,11 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
     protected function buildUrlParamOffset(MetaObjectInterface $object)
     {
         return $object->getDataAddressProperty(static::DAP_REQUEST_OFFSET_PARAMETER);
+    }
+    
+    protected function buildUrlParamPage(MetaObjectInterface $object)
+    {
+        return $object->getDataAddressProperty(static::DAP_REQUEST_PAGE_PARAMETER);
     }
     
     protected function buildUrlParamLimit(MetaObjectInterface $object)

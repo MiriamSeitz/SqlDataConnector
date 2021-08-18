@@ -55,8 +55,7 @@ class SwaggerModelBuilder extends AbstractModelBuilder implements ModelBuilderIn
         $created_ds = $this->generateAttributes($meta_object, $transaction);
         
         // Generate relations
-        $newAttributes = $this->generateAttributes($meta_object, $transaction);
-        $this->generateRelations($meta_object, $newAttributes, $transaction);
+        $this->generateRelations($meta_object, $created_ds, $transaction);
         
         // TODO Generate queries for object
         // $this->generateActions($meta_object, $transaction);
@@ -395,6 +394,11 @@ class SwaggerModelBuilder extends AbstractModelBuilder implements ModelBuilderIn
         return $paths[0];
     }
     
+    protected function isSwagger(int $majorVersion) : bool
+    {
+        return substr($this->getSwaggerVersion(), 0, 1) == $majorVersion;
+    }
+    
     protected function getSwaggerPathToReadById(string $definitionName) : ?array
     {
         $paths = [];
@@ -656,7 +660,7 @@ class SwaggerModelBuilder extends AbstractModelBuilder implements ModelBuilderIn
             
             $row = [
                 'NAME' => $fieldDef['title'] ?? $this->generateLabel($field),
-                'ALIAS' => $field,
+                'ALIAS' => $this->sanitizeAlias($field),
                 'DATATYPE' => $this->getDataTypeId($dataType),
                 'DATA_ADDRESS' => $field,
                 'DATA_ADDRESS_PROPS' => $props->toJson(),
@@ -675,6 +679,14 @@ class SwaggerModelBuilder extends AbstractModelBuilder implements ModelBuilderIn
             $sheet->addRow($row);
         }
         return $sheet;
+    }
+    
+    protected function sanitizeAlias(string $alias) : string
+    {
+        if (substr($alias, 0, 1) === '_') {
+            $alias = substr($alias, 1);
+        }
+        return $alias;
     }
     
     protected function findUidField(array $definition) : ?string
