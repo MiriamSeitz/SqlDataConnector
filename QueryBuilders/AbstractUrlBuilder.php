@@ -1547,7 +1547,7 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
         if ($this->isRemotePaginationTotalAvailable() !== true) {
             return new DataQueryResultData([], 0, true, null);
         }
-        parent::count($data_connection);
+        return $this->read($data_connection);
     }
     
     protected function setUrlPlaceholderValue(string $placeholder, $value) : AbstractUrlBuilder
