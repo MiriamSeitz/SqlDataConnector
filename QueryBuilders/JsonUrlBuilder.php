@@ -289,6 +289,7 @@ class JsonUrlBuilder extends AbstractUrlBuilder
     protected function getValueFromRow(QueryPartAttribute $qpart, array $row)
     {
         $path = $qpart->getDataAddress();
+        $path = $this->replacePlaceholdersByFilterValues($path);
         switch (true) {
             /* TODO Add JSON path support!
             case substr($path, 0, 1) === '$':
