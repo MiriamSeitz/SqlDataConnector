@@ -1198,7 +1198,7 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
                 $splitFilter->setComparator(ComparatorDataType::EQUALS);
                 foreach ($split_values as $nr => $val) {
                     // skip the first UID as it has been fetched already
-                    if ($nr === 0) {
+                    if ($nr === 0 || $splitFilter->getDataType()->isValueEmpty($val)) {
                         continue;
                     }
                     $this->setSubrequestNo($nr);
