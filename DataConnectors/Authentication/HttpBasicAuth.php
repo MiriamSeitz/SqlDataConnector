@@ -14,6 +14,7 @@ use exface\Core\Interfaces\Selectors\UserSelectorInterface;
 use exface\Core\Interfaces\Security\PasswordAuthenticationTokenInterface;
 use exface\UrlDataConnector\DataConnectors\HttpConnector;
 use exface\UrlDataConnector\CommonLogic\AbstractHttpAuthenticationProvider;
+use exface\Core\Exceptions\Security\AuthenticationFailedError;
 
 /**
  * HTTP basic authentication for HTTP connectors
@@ -26,6 +27,8 @@ class HttpBasicAuth extends AbstractHttpAuthenticationProvider
     private $user = null;
     
     private $password = null;
+    
+    private $passwordRequired = false;
     
     /**
      *
@@ -196,12 +199,21 @@ class HttpBasicAuth extends AbstractHttpAuthenticationProvider
             throw new DataConnectionConfigurationError($this, "Cannot perform authentication in data connection '{$this->getName()}'! Either provide authentication_url or a general url in the connection configuration.");
         }
         
+        $password = $token->getPassword();
+        $passwordRequired = $this->isPasswordRequired();
+        if ($passwordRequired && ($password === null || $password === '')) {
+            throw new AuthenticationFailedError($this->getConnection(), 'No username/password provided for data connection ' . $this->getConnection()->getName() . '!');
+        }
+        
+        // Disable password requirement to let the auth-request pass through.
+        $this->setPasswordRequired(false);
         try {
             $request = new Request($this->getAuthenticationRequestMethod(), $url);
             $this->getConnection()->sendRequest($request, $this->getAuthenticationRequestOptions([], $token));
         } catch (\Throwable $e) {
             throw $e;
         }
+        $this->setPasswordRequired($passwordRequired);
         
         return $token;
     }
@@ -246,6 +258,40 @@ class HttpBasicAuth extends AbstractHttpAuthenticationProvider
      */
     public function signRequest(RequestInterface $request): RequestInterface
     {
+        $password = $this->getPassword();
+        if ($this->isPasswordRequired() && ($password === null || $password === '')) {
+            throw new AuthenticationFailedError($this->getConnection(), 'No username/password provided for data connection ' . $this->getConnection()->getName() . '!');
+        }
+        
         return $request;
+    }
+    
+    /**
+     * 
+     * @return bool
+     */
+    public function isPasswordRequired() : bool
+    {
+        return $this->passwordRequired;
+    }
+    
+    /**
+     * Set to TRUE to check for a password BEFORE sending a request to the server.
+     * 
+     * Use this option if the server does not produce a proper error on empty credentials. Some
+     * servers will simply ignore such requests or send blank responses - in this case no login
+     * promt will appear unless this option is set.
+     * 
+     * @uxon-property password_required
+     * @uxon-type boolean
+     * @uxon-default false
+     * 
+     * @param bool $value
+     * @return HttpBasicAuth
+     */
+    public function setPasswordRequired(bool $value) : HttpBasicAuth
+    {
+        $this->passwordRequired = $value;
+        return $this;
     }
 }
