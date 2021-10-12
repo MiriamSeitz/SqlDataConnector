@@ -797,11 +797,6 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
         return $val;
     }
     
-    protected function getPropertyFilterRemoteUrl(QueryPartFilter $part) : ?string
-    {
-        
-    }
-    
     protected function getPropertyFilterLocally(QueryPartFilter $qpart) : ?bool
     {
         $val = BooleanDataType::cast($qpart->getDataAddressProperty(static::DAP_FILTER_LOCALLY));
@@ -1280,12 +1275,16 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
      * The UID-filter is passed by reference, so it can be fetched and modified directly while
      * processing the query. This is important for data sources, where UID-requests must be split or handled differently in any other way.
      *
-     * @param QueryPartFilter $value            
+     * @param QueryPartFilter $qpart            
      * @return AbstractUrlBuilder
      */
-    protected function setRequestSplitFilter(QueryPartFilter $value)
+    protected function setRequestSplitFilter(QueryPartFilter $qpart)
     {
-        $this->request_split_filter = $value;
+        if ($qpart->getDataAddressProperty(self::DAP_FILTER_LOCALLY) === null) {
+            $qpart->setApplyAfterReading(false);
+            $qpart->setDataAddressProperty(self::DAP_FILTER_LOCALLY, false);
+        }
+        $this->request_split_filter = $qpart;
         return $this;
     }
 
