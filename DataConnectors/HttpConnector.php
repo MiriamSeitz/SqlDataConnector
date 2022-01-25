@@ -144,6 +144,8 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
     
     private $swaggerUrl = null;
     
+    private $sendRequestIdWithHeader = null;
+    
     // Authentication
     /**
      * 
@@ -433,6 +435,11 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
                     ->withPort($wbUri->getPort());
                 $request = $request->withUri($fullUri);
             }
+        }
+        
+        // Add the X-Request-ID header if required
+        if ($requestIdHeader = $this->getSendRequestIdWithHeader()) {
+            $request = $request->withHeader($requestIdHeader, $this->getWorkbench()->getContext()->getScopeRequest()->getRequestId());
         }
         
         // Now add everything related to authentication by pssing the request to the auth
@@ -1242,5 +1249,38 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
         }
         
         return;
+    }
+    
+    /**
+     * 
+     * @return string|NULL
+     */
+    protected function getSendRequestIdWithHeader() : ?string
+    {
+        return $this->sendRequestIdWithHeader;
+    }
+    
+    /**
+     * If set, the request id used by the workbench internally will be sent with the speicified HTTP header.
+     * 
+     * The value of this property should be the header name (e.g. `X-Request-ID`) or
+     * `null`. The default is `null`, so not request id is forwarded to the data source.
+     * 
+     * Note, that this can result in multiple requests to the data source with the
+     * same id as the may result from the same request to the workbench (e.g. when
+     * reading multiple URLs into a single data set).
+     * 
+     * @uxon-property send_request_id_with_header
+     * @uxon-type string
+     * @uxon-template X-Request-ID
+     * @uxon-default null
+     * 
+     * @param string $value
+     * @return HttpConnector
+     */
+    public function setSendRequestIdWithHeader(?string $value) : HttpConnector
+    {
+        $this->sendRequestIdWithHeader = $value;
+        return $this;
     }
 }
