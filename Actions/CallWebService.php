@@ -346,7 +346,7 @@ class CallWebService extends AbstractAction implements iCallService
         foreach ($requiredParams as $param) {
             $name = $param->getName();
             $val = $data->getCellValue($name, $rowNr);
-            $val = $this->prepareParamValue($param, $val);
+            $val = $this->prepareParamValue($param, $val) ?? '';
             $phValues[$name] = $val;
         }
         
@@ -370,7 +370,7 @@ class CallWebService extends AbstractAction implements iCallService
                 foreach ($this->getParameters() as $param) {
                     $name = $param->getName();
                     $val = $data->getCellValue($name, $rowNr);
-                    $val = $this->prepareParamValue($param, $val);
+                    $val = $this->prepareParamValue($param, $val) ?? '';
                     $params[$name] = $val;
                 }
                 $str = json_encode($params);
@@ -379,7 +379,7 @@ class CallWebService extends AbstractAction implements iCallService
                 foreach ($this->getParameters() as $param) {
                     $name = $param->getName();
                     $val = $data->getCellValue($name, $rowNr);
-                    $val = $this->prepareParamValue($param, $val);
+                    $val = $this->prepareParamValue($param, $val) ?? '';
                     $str .= '&' . urlencode($name) . '=' . urlencode($val);
                 }
                 break;
@@ -589,7 +589,7 @@ class CallWebService extends AbstractAction implements iCallService
         foreach ($this->getParameters() as $param) {
             $name = $param->getName();
             $val = $data->getCellValue($name, $rowNr);
-            $val = $this->prepareParamValue($param, $val);
+            $val = $this->prepareParamValue($param, $val) ?? '';
             if (in_array($param->getName(), $urlPlaceholders) === true) {
                 $urlPhValues[$name] = $val;
             }
@@ -608,7 +608,7 @@ class CallWebService extends AbstractAction implements iCallService
      * @param mixed $val
      * @return string
      */
-    protected function prepareParamValue(ServiceParameterInterface $parameter, $val) : string
+    protected function prepareParamValue(ServiceParameterInterface $parameter, $val) : ?string
     {
         return $parameter->getDataType()->parse($val);
     }

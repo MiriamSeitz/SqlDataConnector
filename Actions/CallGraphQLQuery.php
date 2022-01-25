@@ -72,7 +72,7 @@ class CallGraphQLQuery extends CallWebService
      * {@inheritDoc}
      * @see \exface\UrlDataConnector\Actions\CallWebService::prepareParamValue()
      */
-    protected function prepareParamValue(ServiceParameterInterface $parameter, $val) : string
+    protected function prepareParamValue(ServiceParameterInterface $parameter, $val) : ?string
     {
         if ($parameter->hasDefaultValue() === true && $val === null) {
             $val = $parameter->getDefaultValue();
