@@ -15,6 +15,8 @@ use exface\Core\Interfaces\Security\PasswordAuthenticationTokenInterface;
 use exface\UrlDataConnector\DataConnectors\HttpConnector;
 use exface\UrlDataConnector\CommonLogic\AbstractHttpAuthenticationProvider;
 use exface\Core\Exceptions\Security\AuthenticationFailedError;
+use exface\Core\CommonLogic\Model\Expression;
+use exface\Core\Factories\ExpressionFactory;
 
 /**
  * HTTP basic authentication for HTTP connectors
@@ -49,10 +51,15 @@ class HttpBasicAuth extends AbstractHttpAuthenticationProvider
      */
     public function getUser()
     {
-        if ($this->user === null && ($this->connection instanceof HttpConnector)) {
-            return $this->connection->getUser();
+        if ((null === $user = $this->user) && ($this->connection instanceof HttpConnector)) {
+            $user = $this->connection->getUser();
         }
-        return $this->user;
+        
+        if ($user !== null && $user !== '' && Expression::detectFormula($user)) {
+            $user = ExpressionFactory::createFromString($this->getWorkbench(), $user)->evaluate();
+        }
+        
+        return $user;
     }
     
     /**
@@ -77,10 +84,15 @@ class HttpBasicAuth extends AbstractHttpAuthenticationProvider
      */
     public function getPassword()
     {
-        if ($this->password === null && ($this->connection instanceof HttpConnector)) {
-            return $this->connection->getPassword();
+        if ((null === $password = $this->password) && ($this->connection instanceof HttpConnector)) {
+            $password = $this->connection->getPassword();
         }
-        return $this->password;
+        
+        if ($password !== null && $password !== '' && Expression::detectFormula($password)) {
+            $password = ExpressionFactory::createFromString($this->getWorkbench(), $password)->evaluate();
+        }
+        
+        return $password;
     }
     
     /**

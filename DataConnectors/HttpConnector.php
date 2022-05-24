@@ -146,6 +146,8 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
     
     private $sendRequestIdWithHeader = null;
     
+    private $headers = [];
+    
     // Authentication
     /**
      * 
@@ -300,6 +302,11 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
             
             // Initialize the client with the handler option
             $defaults['handler'] = $stack;
+        }
+        
+        // headers
+        if (! empty($this->getHeaders())) {
+            $defaults['headers'] = $this->getHeaders();
         }
         
         try {
@@ -560,6 +567,9 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
      * 
      * WARNING: Don't use this together with `authentication` - the latter will always override!
      * 
+     * This property accepts either a value (i.e. the username itself) or a static formula to
+     * calculate it - e.g. `=User('USERNAME')`
+     * 
      * If set, the `authentication` will be automatically configured to use HTTP basic authentication.
      * If you need any special authentication options, use `authentication` instead. This option
      * here is just a handy shortcut!
@@ -592,12 +602,15 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
      * 
      * WARNING: Don't use this together with `authentication` - the latter will always override!
      * 
+     * This property accepts either a value (i.e. the password itself) or a static formula to
+     * calculate it - e.g. `=GetConfig('...')`
+     * 
      * If set, the `authentication` will be automatically configured to use HTTP basic authentication.
      * If you need any special authentication options, use `authentication` instead. This option
      * here is just a handy shortcut!
      * 
      * @uxon-property password
-     * @uxon-type password
+     * @uxon-type password|metamodel:formula
      *
      * @param string $value            
      * @return \exface\UrlDataConnector\DataConnectors\HttpConnector
@@ -1281,6 +1294,31 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
     public function setSendRequestIdWithHeader(?string $value) : HttpConnector
     {
         $this->sendRequestIdWithHeader = $value;
+        return $this;
+    }
+    
+    /**
+     * 
+     * @return array
+     */
+    protected function getHeaders() : array
+    {
+        return $this->headers;
+    }
+    
+    /**
+     * Headers to send with every request
+     * 
+     * @uxon-property headers
+     * @uxon-type object
+     * @uxon-template {"Accept": "application/json"}
+     * 
+     * @param UxonObject|array $value
+     * @return HttpConnector
+     */
+    protected function setHeaders($value) : HttpConnector
+    {
+        $this->headers = ($value instanceof UxonObject ? $value->toArray() : $value);
         return $this;
     }
 }
