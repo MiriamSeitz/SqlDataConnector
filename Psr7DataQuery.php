@@ -11,6 +11,9 @@ use exface\Core\Widgets\DebugMessage;
 use exface\Core\Factories\WidgetFactory;
 use exface\Core\CommonLogic\Workbench;
 use exface\Core\DataTypes\BooleanDataType;
+use exface\Core\Interfaces\WorkbenchInterface;
+use Psr\Http\Message\MessageInterface;
+use exface\Core\Exceptions\RuntimeException;
 
 class Psr7DataQuery extends AbstractDataQuery
 {
@@ -103,24 +106,23 @@ class Psr7DataQuery extends AbstractDataQuery
         try {
             $url = $this->getRequest()->getUri()->__toString();
         } catch (\Throwable $e) {
-            $url = 'Unavailable: ' . $e->getMessage();
+            $url = 'Unavailable: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine();
         }
-        $request_widget = WidgetFactory::create($page, 'Html', $request_tab);
-        $request_widget_html = <<<HTML
-            <div style="padding:10px;">
-                <h3>Request URL</h3>
-                <a href="{$url}">{$url}</a>
-            </div>
-            <div style="padding:10px;">
-                <h3>HTTP request headers</h3>
-                {$this->generateRequestHeaders($debug_widget->getWorkbench())}
-            </div>
-            <div style="padding:10px;">
-                <h3>Request body</h3>
-                {$this->generateMessageBody($debug_widget->getWorkbench(), $this->getRequest())}
-            </div>
-HTML;
-        $request_widget->setValue($request_widget_html);
+        $request_widget = WidgetFactory::create($page, 'Markdown', $request_tab);
+        $request_widget->setValue(<<<MD
+## Request URL
+
+[{$url}]({$url})
+
+## Request headers
+
+{$this->generateRequestHeaders()}
+
+## Request body
+
+{$this->generateMessageBody($this->getRequest())}
+
+MD);
         $request_widget->setWidth('100%');
         $request_tab->addWidget($request_widget);
         $debug_widget->addTab($request_tab);
@@ -129,18 +131,17 @@ HTML;
         $response_tab = $debug_widget->createTab();
         $response_tab->setCaption('Data-Response');
         
-        $response_widget = WidgetFactory::create($page, 'Html', $response_tab);
-        $response_widget_html = <<<HTML
-            <div style="padding:10px;">
-                <h3>HTTP response headers</h3>
-                {$this->generateResponseHeaders($debug_widget->getWorkbench())}
-            </div>
-            <div style="padding:10px;">
-                <h3>Response body</h3>
-                {$this->generateMessageBody($debug_widget->getWorkbench(), $this->getResponse())}
-            </div>
-HTML;
-        $response_widget->setValue($response_widget_html);
+        $response_widget = WidgetFactory::create($page, 'Markdown', $response_tab);
+        $response_widget->setValue(<<<MD
+## Response headers
+
+{$this->generateResponseHeaders()}
+
+## Response body
+                
+{$this->generateMessageBody($this->getResponse())}
+
+MD);
         $response_widget->setWidth('100%');
         $response_tab->addWidget($response_widget);
         $debug_widget->addTab($response_tab);
@@ -153,19 +154,16 @@ HTML;
     /**
      * Generates a HTML-representation of the request-headers.
      * 
-     * @param Workbench $workbench
+     * @param WorkbenchInterface $workbench
      * @return string
      */
-    protected function generateRequestHeaders(Workbench $workbench) {
+    protected function generateRequestHeaders() : string
+    {
         if ($this->getRequest() !== null) {
-            try {
-                $requestHeaders = $this->getRequest()->getMethod() . ' ' . $this->getRequest()->getRequestTarget() . ' HTTP/' . $this->getRequest()->getProtocolVersion();
-                $requestHeaders .= $this->generateMessageHeaders($workbench, $this->getRequest());
-            } catch (\Throwable $e) {
-                $requestHeaders = 'Error reading message headers.';
-            }
+            $requestHeaders = $this->getRequest()->getMethod() . ' ' . $this->getRequest()->getRequestTarget() . ' HTTP/' . $this->getRequest()->getProtocolVersion() . PHP_EOL . PHP_EOL;
+            $requestHeaders .= $this->generateMessageHeaders($this->getRequest());
         } else {
-            $requestHeaders = 'Message empty.';
+            $requestHeaders = 'No HTTP message.';
         }
         
         return $requestHeaders;
@@ -174,20 +172,16 @@ HTML;
     /**
      * Generates a HTML-representation of the response-headers.
      * 
-     * @param Workbench $workbench
+     * @param WorkbenchInterface $workbench
      * @return string
      */
-    protected function generateResponseHeaders(Workbench $workbench)
+    protected function generateResponseHeaders() : string
     {
         if (!is_null($this->getResponse())) {
-            try {
-                $responseHeaders = 'HTTP/' . $this->getResponse()->getProtocolVersion() . ' ' . $this->getResponse()->getStatusCode() . ' ' . $this->getResponse()->getReasonPhrase();
-                $responseHeaders .= $this->generateMessageHeaders($workbench, $this->getResponse());
-            } catch (\Throwable $e) {
-                $responseHeaders = 'Error reading message headers.';
-            }
+            $responseHeaders = 'HTTP/' . $this->getResponse()->getProtocolVersion() . ' ' . $this->getResponse()->getStatusCode() . ' ' . $this->getResponse()->getReasonPhrase() . PHP_EOL . PHP_EOL;
+            $responseHeaders .= $this->generateMessageHeaders($this->getResponse());
         } else {
-            $responseHeaders = 'Message empty.';
+            $responseHeaders = 'No HTTP message.';
         }
         
         return $responseHeaders;
@@ -198,25 +192,25 @@ HTML;
      * 
      * @return string
      */
-    protected function generateMessageHeaders(Workbench $workbench, $message)
+    protected function generateMessageHeaders(MessageInterface $message = null) : string
     {
         if (! is_null($message)) {
             try {
-                $messageHeaders = '<table>';
+                $messageHeaders  = "| Header | Value |" . PHP_EOL;
+                $messageHeaders .= "| ------ | ----- |" . PHP_EOL;
                 foreach ($message->getHeaders() as $header => $values) {
-                    // Der Authorization-Header sollte weder angezeigt noch geloggt werden.
-                    if (! ($header == 'Authorization')) {
-                        foreach ($values as $value) {
-                            $messageHeaders .= '<tr><td>' . $header . ': </td><td>' . $value . '</td></tr>';
+                    foreach ($values as $value) {
+                        if (strcasecmp($header, 'Authorization') === 0) {
+                            $value = '***';
                         }
+                        $messageHeaders .= "| $header | $value |" . PHP_EOL;
                     }
                 }
-                $messageHeaders .= '</table>';
             } catch (\Throwable $e) {
-                $messageHeaders = 'Error reading message headers.';
+                $messageHeaders = 'Error reading message headers: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine();
             }
         } else {
-            $messageHeaders = 'Message empty.';
+            $messageHeaders = 'No HTTP message.';
         }
         
         return $messageHeaders;
@@ -225,10 +219,10 @@ HTML;
     /**
      * Generates a HTML-representation of the request or response body.
      * 
-     * @param Workbench $workbench
+     * @param MessageInterface $message
      * @return string
      */
-    protected function generateMessageBody(Workbench $workbench, $message)
+    protected function generateMessageBody(MessageInterface $message = null) : string
     {
         if (! is_null($message)) {
             try {
@@ -240,25 +234,47 @@ HTML;
                     
                     switch (true) {
                         case stripos($contentType, 'json') !== false:
-                            $messageBody = '<pre>' . $workbench->getDebugger()->printVariable(json_decode($message->getBody()->__toString()), true, 4) . '</pre>';
+                            $jsonPrettified = json_encode(json_decode($message->getBody()->__toString()), JSON_PRETTY_PRINT);
+                            $messageBody = <<<MD
+                            
+```json
+{$jsonPrettified}
+```
+MD;
                             break;
                         case stripos($contentType, 'xml') !== false:
                             $domxml = new \DOMDocument();
                             $domxml->preserveWhiteSpace = false;
                             $domxml->formatOutput = true;
                             $domxml->loadXML($message->getBody());
-                            $messageBody = '<pre>' . htmlentities($domxml->saveXML()) . '</pre>';
+                            $messageBody = <<<MD
+
+```xml
+{$domxml->saveXML()}
+```
+MD;
                             break;
                         case stripos($contentType, 'html') !== false:
                             $indenter = new \Gajus\Dindent\Indenter();
-                            $messageBody = '<pre>' . htmlentities($indenter->indent($message->getBody())) . '</pre>';
+                            $messageBody = <<<MD
+                            
+```html
+{$indenter->indent($message->getBody())}
+```
+MD;
                             break;
                         default:
-                            $messageBody = '<pre>' . htmlentities($message->getBody()->__toString()) . '</pre>';
+                            $messageBody = <<<MD
+                            
+```
+{$message->getBody()->__toString()}
+```
+MD;
+                            break;
                     }
                 }
             } catch (\Throwable $e) {
-                $messageBody = 'Error reading message body.';
+                $messageBody = 'Error reading message body: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine();
             }
         } else {
             $messageBody = 'Message empty.';
