@@ -116,11 +116,11 @@ class Psr7DataQuery extends AbstractDataQuery
 
 ## Request headers
 
-{$this->generateRequestHeaders()}
+{$this->buildMarkdownRequestHeaders()}
 
 ## Request body
 
-{$this->generateMessageBody($this->getRequest())}
+{$this->buildMarkdownMessageBody($this->getRequest())}
 
 MD);
         $request_widget->setWidth('100%');
@@ -135,11 +135,11 @@ MD);
         $response_widget->setValue(<<<MD
 ## Response headers
 
-{$this->generateResponseHeaders()}
+{$this->buildMarkdownResponseHeaders()}
 
 ## Response body
                 
-{$this->generateMessageBody($this->getResponse())}
+{$this->buildMarkdownMessageBody($this->getResponse())}
 
 MD);
         $response_widget->setWidth('100%');
@@ -157,11 +157,11 @@ MD);
      * @param WorkbenchInterface $workbench
      * @return string
      */
-    protected function generateRequestHeaders() : string
+    protected function buildMarkdownRequestHeaders() : string
     {
         if ($this->getRequest() !== null) {
             $requestHeaders = $this->getRequest()->getMethod() . ' ' . $this->getRequest()->getRequestTarget() . ' HTTP/' . $this->getRequest()->getProtocolVersion() . PHP_EOL . PHP_EOL;
-            $requestHeaders .= $this->generateMessageHeaders($this->getRequest());
+            $requestHeaders .= $this->buildMarkdownMessageHeaders($this->getRequest());
         } else {
             $requestHeaders = 'No HTTP message.';
         }
@@ -175,11 +175,11 @@ MD);
      * @param WorkbenchInterface $workbench
      * @return string
      */
-    protected function generateResponseHeaders() : string
+    protected function buildMarkdownResponseHeaders() : string
     {
         if (!is_null($this->getResponse())) {
             $responseHeaders = 'HTTP/' . $this->getResponse()->getProtocolVersion() . ' ' . $this->getResponse()->getStatusCode() . ' ' . $this->getResponse()->getReasonPhrase() . PHP_EOL . PHP_EOL;
-            $responseHeaders .= $this->generateMessageHeaders($this->getResponse());
+            $responseHeaders .= $this->buildMarkdownMessageHeaders($this->getResponse());
         } else {
             $responseHeaders = 'No HTTP message.';
         }
@@ -192,15 +192,15 @@ MD);
      * 
      * @return string
      */
-    protected function generateMessageHeaders(MessageInterface $message = null) : string
+    protected function buildMarkdownMessageHeaders(MessageInterface $message = null) : string
     {
         if (! is_null($message)) {
             try {
-                $messageHeaders  = "| Header | Value |" . PHP_EOL;
-                $messageHeaders .= "| ------ | ----- |" . PHP_EOL;
+                $messageHeaders  = "| HTTP header | Value |" . PHP_EOL;
+                $messageHeaders .= "| ----------- | ----- |" . PHP_EOL;
                 foreach ($message->getHeaders() as $header => $values) {
                     foreach ($values as $value) {
-                        if (strcasecmp($header, 'Authorization') === 0) {
+                        if ($this->isHeaderSensitive($header)) {
                             $value = '***';
                         }
                         $messageHeaders .= "| $header | $value |" . PHP_EOL;
@@ -215,6 +215,21 @@ MD);
         
         return $messageHeaders;
     }
+    
+    /**
+     * 
+     * @param string $headerName
+     * @return bool
+     */
+    protected function isHeaderSensitive(string $headerName) : bool
+    {
+        switch (true) {
+            case strcasecmp($headerName, 'Authorization') === 0:
+            case stripos($headerName, 'key') !== false:
+                return true;
+        }
+        return false;
+    }
 
     /**
      * Generates a HTML-representation of the request or response body.
@@ -222,7 +237,7 @@ MD);
      * @param MessageInterface $message
      * @return string
      */
-    protected function generateMessageBody(MessageInterface $message = null) : string
+    protected function buildMarkdownMessageBody(MessageInterface $message = null) : string
     {
         if (! is_null($message)) {
             try {
