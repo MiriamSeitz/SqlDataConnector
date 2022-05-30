@@ -26,6 +26,7 @@ use exface\Core\CommonLogic\Constants\Icons;
 use exface\UrlDataConnector\Exceptions\HttpConnectorRequestError;
 use exface\Core\Interfaces\Exceptions\AuthenticationExceptionInterface;
 use exface\Core\Exceptions\Security\AuthenticationFailedError;
+use exface\UrlDataConnector\DataConnectors\HttpConnector;
 
 /**
  * Calls a generic web service using parameters to fill placeholders in the URL and body.
@@ -429,48 +430,12 @@ class CallWebService extends AbstractAction implements iCallService
         }
         
         // Call the webservice for every row in the input data.
+        $httpConnection = $this->getDataConnection();
         for ($i = 0; $i < $rowCnt; $i++) {
             $request = new Request($this->getMethod(), $this->buildUrl($input, $i), $this->buildHeaders(), $this->buildBody($input, $i));
             $query = new Psr7DataQuery($request);
             // Perform the query regularly via URL connector
-            try {
-                $response = $this->getDataConnection()->query($query)->getResponse();
-            } catch (\Throwable $e) {
-                $respMessage = null;
-                $respErrorCode = null;
-                // If there are errors, try to extract the error message using the action's
-                // response parsing logic. Keep in mind, that the action's message extraction
-                // logic may be different from that of the data source: e.g. the action may have
-                // a `error_message_pattern`!
-                if ($eResponse = $this->getErrorResponse($e)) {
-                    $respMessage = $this->getErrorMessageFromResponse($eResponse);
-                    $respErrorCode = $this->getErrorCodeFromResponse($eResponse);
-                    if ($respErrorCode === null && $respMessage) {
-                        $respErrorCode = '';
-                    }
-                    $respStatusCode = $eResponse->getStatusCode();
-                    $respReasonPhrase = $eResponse->getReasonPhrase();
-                } 
-                
-                // If there is a meaningfull response message, create a new exception an make sure, that
-                // message is used as title. Otherwise rethrow the original exception!
-                if ($respMessage && $respErrorCode !== null) {
-                    switch (true) {
-                        case $e instanceof AuthenticationExceptionInterface:
-                            throw new AuthenticationFailedError($e->getAuthenticationProvider(), $respMessage, $e->getAlias(), $e);
-                        case $e instanceof HttpConnectorRequestError:
-                            $eNew = new HttpConnectorRequestError($query, $e->getHttpStatusCode(), $e->getHttpReasonPhrase(), $respMessage, $e->getAlias(), $e->getPrevious());
-                            break;
-                        default:
-                            $eNew = new HttpConnectorRequestError($query, $respStatusCode, $respReasonPhrase, $respMessage, $respErrorCode, $e);
-                    }
-                    
-                    $eNew->setUseRemoteMessageAsTitle(($respMessage !== null ? true : false));
-                    throw $eNew;
-                } else {
-                    throw $e;
-                }
-            }
+            $response = $httpConnection->query($query)->getResponse();
         }
         
         $resultData = $this->parseResponse($response, $resultData);
@@ -512,9 +477,25 @@ class CallWebService extends AbstractAction implements iCallService
             if (! $this->dataSource instanceof DataSourceInterface) {
                 $this->dataSource = DataSourceFactory::createFromModel($this->getWorkbench(), $this->dataSource);
             }
-            return $this->dataSource->getConnection();
+            $conn = $this->dataSource->getConnection();
+        } else {
+            $conn = $this->getMetaObject()->getDataConnection();
         }
-        return $this->getMetaObject()->getDataConnection();
+        // If changes to the connection config are needed, clone the connection before
+        // applying them!
+        if ($this->errorMessagePattern !== null || $this->errorCodePattern !== null) {
+            if (! ($conn instanceof HttpConnector)) {
+                throw new ActionConfigurationError($this, 'Cannot use a custom `error_message_pattern` or `error_code_pattern` with data connection "' . $conn->getAliasWithNamespace() . '"!');
+            }
+            $conn = clone($conn);
+            if ($this->errorMessagePattern !== null) {
+                $conn->setErrorTextPattern($this->errorMessagePattern);
+            }
+            if ($this->errorCodePattern !== null) {
+                $conn->setErrorCodePattern($this->errorCodePattern);
+            }
+        }
+        return $conn;
     }
     
     /**
@@ -779,28 +760,14 @@ class CallWebService extends AbstractAction implements iCallService
     }
     
     /**
-     *
-     * @return string
-     */
-    protected function getErrorMessagePattern() : ?string
-    {
-        return $this->errorMessagePattern;
-    }
-    
-    /**
      * Use a regular expression to extract messages from error responses - the first match is returned or one explicitly named "message".
      * 
-     * By default, the action will use the error handler of the data connection to
-     * parse error responses from the web service. This will mostly produce general
-     * errors like "500 Internal Server Error". Using the `error_message_pattern`
-     * you can tell the action where to look for the actual error text.
-     * 
-     * For example, if the web service would return the following JSON
-     * `{"error":"Sorry, you are out of luck!"}`, you could use this regex to get the
-     * message: `/"error":"(?<message>[^"]*)"/`.
+     * This works the same, as `error_text_pattern` of an `HttpConnector`, but allows
+     * to override the configuration for this single action.
      * 
      * @uxon-property error_message_pattern
      * @uxon-type string
+     * @uxon-template /"error":"([^"]*)"/
      * 
      * @param string $value
      * @return CallWebService
@@ -812,29 +779,14 @@ class CallWebService extends AbstractAction implements iCallService
     }
     
     /**
-     *
-     * @return string
-     */
-    protected function getErrorCodePattern() : ?string
-    {
-        return $this->errorMessageCode;
-    }
-    
-    /**
      * Use a regular expression to extract error codes from error responses - the first match is returned or one explicitly named "code".
      * 
-     * By default, the action will use the error handler of the data connection to
-     * parse error responses from the web service. This will mostly produce general
-     * errors like "500 Internal Server Error". Using the `error_code_pattern`
-     * you can tell the action where to look for the actual error code an use
-     * it in the error it produces.
-     * 
-     * For example, if the web service would return the following JSON
-     * `{"errorCode":"2","error":"Sorry!"}`, you could use this regex to get the
-     * message: `/"errorCode":"(?<code>[^"]*)"/`.
+     * This works the same, as `error_code_pattern` of an `HttpConnector`, but allows
+     * to override the configuration for this single action.
      * 
      * @uxon-property error_code_pattern
      * @uxon-type string
+     * @uxon-template /"errorCode":"([^"]*)"/
      * 
      * @param string $value
      * @return CallWebService
@@ -843,64 +795,6 @@ class CallWebService extends AbstractAction implements iCallService
     {
         $this->errorMessageCode = $value;
         return $this;
-    }
-    
-    /**
-     * 
-     * @param \Throwable $e
-     * @return ResponseInterface|NULL
-     */
-    protected function getErrorResponse(\Throwable $e) : ?ResponseInterface
-    {
-        do {
-            if (method_exists($e, 'getResponse') === true) {
-                $response = $e->getResponse();
-                if ($response instanceof ResponseInterface) {
-                    return $response;
-                }
-            }
-            $e = $e->getPrevious();
-        } while ($e !== null);
-        
-        return null;
-    }
-    
-    /**
-     *
-     * @param ResponseInterface $response
-     * @return string|NULL
-     */
-    protected function getErrorMessageFromResponse(ResponseInterface $response) : ?string
-    {
-        if ($this->getErrorMessagePattern() !== null) {
-            $body = $response->getBody()->__toString();
-            $matches = [];
-            preg_match($this->getErrorMessagePattern(), $body, $matches);
-            if (empty($matches) === false) {
-                return $matches['message'] ?? $matches[1];
-            }
-        }
-        
-        return null;
-    }
-    
-    /**
-     *
-     * @param ResponseInterface $response
-     * @return string|NULL
-     */
-    protected function getErrorCodeFromResponse(ResponseInterface $response) : ?string
-    {
-        if ($this->getErrorCodePattern() !== null) {
-            $body = $response->getBody()->__toString();
-            $matches = [];
-            preg_match($this->getResultMessagePattern(), $body, $matches);
-            if (empty($matches) === false) {
-                return $matches['message'] ?? $matches[1];
-            }
-        }
-        
-        return null;
     }
     
     /**
