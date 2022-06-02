@@ -329,7 +329,11 @@ class CallWebService extends AbstractAction implements iCallService
         $body = $this->getBody();
         
         if ($body === null) {
-            return $this->buildBodyFromParameters($data, $rowNr);
+            if (strcasecmp($this->getMethod(), 'GET') !== 0) {
+                return $this->buildBodyFromParameters($data, $rowNr);
+            } else {
+                return '';
+            }
         }
         
         $placeholders = StringDataType::findPlaceholders($body);
