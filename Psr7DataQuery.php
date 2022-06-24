@@ -10,7 +10,6 @@ use Psr\Http\Message\StreamInterface;
 use exface\Core\Widgets\DebugMessage;
 use exface\Core\CommonLogic\Workbench;
 use exface\Core\DataTypes\BooleanDataType;
-use exface\Core\CommonLogic\Debugger;
 use exface\Core\CommonLogic\Debugger\HttpMessageDebugWidgetRenderer;
 
 class Psr7DataQuery extends AbstractDataQuery
@@ -97,7 +96,7 @@ class Psr7DataQuery extends AbstractDataQuery
     public function createDebugWidget(DebugMessage $debug_widget)
     {
         if (null !== $request = $this->getRequest()) {
-            $renderer = new HttpMessageDebugWidgetRenderer($request, $this->getResponse(), 'Data-Request', 'Data-Response');
+            $renderer = new HttpMessageDebugWidgetRenderer($request, $this->getResponse(), 'Data request', 'Data response');
             $debug_widget = $renderer->createDebugWidget($debug_widget);
         }
         
