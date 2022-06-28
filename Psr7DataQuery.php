@@ -8,9 +8,9 @@ use GuzzleHttp\Psr7\Request;
 use Psr\Http\Message\UriInterface;
 use Psr\Http\Message\StreamInterface;
 use exface\Core\Widgets\DebugMessage;
-use exface\Core\Factories\WidgetFactory;
 use exface\Core\CommonLogic\Workbench;
 use exface\Core\DataTypes\BooleanDataType;
+use exface\Core\CommonLogic\Debugger\HttpMessageDebugWidgetRenderer;
 
 class Psr7DataQuery extends AbstractDataQuery
 {
@@ -95,177 +95,14 @@ class Psr7DataQuery extends AbstractDataQuery
      */
     public function createDebugWidget(DebugMessage $debug_widget)
     {
-        $page = $debug_widget->getPage();
-        
-        // Request
-        $request_tab = $debug_widget->createTab();
-        $request_tab->setCaption('Data-Request');
-        try {
-            $url = $this->getRequest()->getUri()->__toString();
-        } catch (\Throwable $e) {
-            $url = 'Unavailable: ' . $e->getMessage();
+        if (null !== $request = $this->getRequest()) {
+            $renderer = new HttpMessageDebugWidgetRenderer($request, $this->getResponse(), 'Data request', 'Data response');
+            $debug_widget = $renderer->createDebugWidget($debug_widget);
         }
-        $request_widget = WidgetFactory::create($page, 'Html', $request_tab);
-        $request_widget_html = <<<HTML
-            <div style="padding:10px;">
-                <h3>Request URL</h3>
-                <a href="{$url}">{$url}</a>
-            </div>
-            <div style="padding:10px;">
-                <h3>HTTP request headers</h3>
-                {$this->generateRequestHeaders($debug_widget->getWorkbench())}
-            </div>
-            <div style="padding:10px;">
-                <h3>Request body</h3>
-                {$this->generateMessageBody($debug_widget->getWorkbench(), $this->getRequest())}
-            </div>
-HTML;
-        $request_widget->setValue($request_widget_html);
-        $request_widget->setWidth('100%');
-        $request_tab->addWidget($request_widget);
-        $debug_widget->addTab($request_tab);
-        
-        // Response
-        $response_tab = $debug_widget->createTab();
-        $response_tab->setCaption('Data-Response');
-        
-        $response_widget = WidgetFactory::create($page, 'Html', $response_tab);
-        $response_widget_html = <<<HTML
-            <div style="padding:10px;">
-                <h3>HTTP response headers</h3>
-                {$this->generateResponseHeaders($debug_widget->getWorkbench())}
-            </div>
-            <div style="padding:10px;">
-                <h3>Response body</h3>
-                {$this->generateMessageBody($debug_widget->getWorkbench(), $this->getResponse())}
-            </div>
-HTML;
-        $response_widget->setValue($response_widget_html);
-        $response_widget->setWidth('100%');
-        $response_tab->addWidget($response_widget);
-        $debug_widget->addTab($response_tab);
         
         return $debug_widget;
     }
-
-    // TODO Translations
     
-    /**
-     * Generates a HTML-representation of the request-headers.
-     * 
-     * @param Workbench $workbench
-     * @return string
-     */
-    protected function generateRequestHeaders(Workbench $workbench) {
-        if ($this->getRequest() !== null) {
-            try {
-                $requestHeaders = $this->getRequest()->getMethod() . ' ' . $this->getRequest()->getRequestTarget() . ' HTTP/' . $this->getRequest()->getProtocolVersion();
-                $requestHeaders .= $this->generateMessageHeaders($workbench, $this->getRequest());
-            } catch (\Throwable $e) {
-                $requestHeaders = 'Error reading message headers.';
-            }
-        } else {
-            $requestHeaders = 'Message empty.';
-        }
-        
-        return $requestHeaders;
-    }
-    
-    /**
-     * Generates a HTML-representation of the response-headers.
-     * 
-     * @param Workbench $workbench
-     * @return string
-     */
-    protected function generateResponseHeaders(Workbench $workbench)
-    {
-        if (!is_null($this->getResponse())) {
-            try {
-                $responseHeaders = 'HTTP/' . $this->getResponse()->getProtocolVersion() . ' ' . $this->getResponse()->getStatusCode() . ' ' . $this->getResponse()->getReasonPhrase();
-                $responseHeaders .= $this->generateMessageHeaders($workbench, $this->getResponse());
-            } catch (\Throwable $e) {
-                $responseHeaders = 'Error reading message headers.';
-            }
-        } else {
-            $responseHeaders = 'Message empty.';
-        }
-        
-        return $responseHeaders;
-    }
-
-    /**
-     * Generates a HTML-representation of the request or response headers.
-     * 
-     * @return string
-     */
-    protected function generateMessageHeaders(Workbench $workbench, $message)
-    {
-        if (! is_null($message)) {
-            try {
-                $messageHeaders = '<table>';
-                foreach ($message->getHeaders() as $header => $values) {
-                    // Der Authorization-Header sollte weder angezeigt noch geloggt werden.
-                    if (! ($header == 'Authorization')) {
-                        foreach ($values as $value) {
-                            $messageHeaders .= '<tr><td>' . $header . ': </td><td>' . $value . '</td></tr>';
-                        }
-                    }
-                }
-                $messageHeaders .= '</table>';
-            } catch (\Throwable $e) {
-                $messageHeaders = 'Error reading message headers.';
-            }
-        } else {
-            $messageHeaders = 'Message empty.';
-        }
-        
-        return $messageHeaders;
-    }
-
-    /**
-     * Generates a HTML-representation of the request or response body.
-     * 
-     * @param Workbench $workbench
-     * @return string
-     */
-    protected function generateMessageBody(Workbench $workbench, $message)
-    {
-        if (! is_null($message)) {
-            try {
-                if (is_null($bodySize = $message->getBody()->getSize()) || $bodySize > 1048576) {
-                    // Groesse des Bodies unbekannt oder groesser 1Mb.
-                    $messageBody = 'Message body is too big to display.';
-                } else {
-                    $contentType = mb_strtolower($message->getHeader('Content-Type')[0]);
-                    
-                    switch (true) {
-                        case stripos($contentType, 'json') !== false:
-                            $messageBody = '<pre>' . $workbench->getDebugger()->printVariable(json_decode($message->getBody()->__toString()), true, 4) . '</pre>';
-                            break;
-                        case stripos($contentType, 'xml') !== false:
-                            $domxml = new \DOMDocument();
-                            $domxml->preserveWhiteSpace = false;
-                            $domxml->formatOutput = true;
-                            $domxml->loadXML($message->getBody());
-                            $messageBody = '<pre>' . htmlentities($domxml->saveXML()) . '</pre>';
-                            break;
-                        case stripos($contentType, 'html') !== false:
-                            $indenter = new \Gajus\Dindent\Indenter();
-                            $messageBody = '<pre>' . htmlentities($indenter->indent($message->getBody())) . '</pre>';
-                            break;
-                        default:
-                            $messageBody = '<pre>' . htmlentities($message->getBody()->__toString()) . '</pre>';
-                    }
-                }
-            } catch (\Throwable $e) {
-                $messageBody = 'Error reading message body.';
-            }
-        } else {
-            $messageBody = 'Message empty.';
-        }
-        
-        return $messageBody;
-    }
     /**
      * @return boolean
      */
@@ -293,5 +130,4 @@ HTML;
     {
         return $this->getRequest()->getUri()->__toString();
     }
-
 }

@@ -598,7 +598,11 @@ class OData2ModelBuilder extends AbstractModelBuilder implements ModelBuilderInt
             $query = new Psr7DataQuery(new Request('GET', $this->getDataConnection()->getMetadataUrl()));
             $query->setUriFixed(true);
             $query = $this->getDataConnection()->query($query);
-            $this->metadata = new Crawler($query->getResponse()->getBody()->__toString());
+            $xml = $query->getResponse()->getBody()->__toString();
+            if (strpos($xml, 'EntityType') === false) {
+                throw new ModelBuilderRuntimeError($this, 'No OData EntityTypes found in metadata from "' . $this->getDataConnection()->getMetadataUrl() . '". Wrong metadata-URL?');
+            }
+            $this->metadata = new Crawler($xml);
         }
         return $this->metadata;
     }

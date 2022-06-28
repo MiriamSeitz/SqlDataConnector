@@ -63,7 +63,7 @@
             "CONFIG": {
                 "hide_file_missing_error": true
             },
-            "READONLY": "0",
+            "READONLY": 0,
             "ALIAS": "LOCAL_FILE_URI",
             "FILTER_CONTEXT": null
         },
@@ -77,7 +77,7 @@
             "LABEL": "Web-URL (readonly)",
             "CONNECTOR": "exface\/UrlDataConnector\/DataConnectors\/HttpConnector.php",
             "CONFIG": null,
-            "READONLY": "1",
+            "READONLY": 1,
             "ALIAS": "URL_READONLY",
             "FILTER_CONTEXT": null
         },
@@ -91,10 +91,10 @@
             "LABEL": "Web-URL (readonly, cached)",
             "CONNECTOR": "exface\/UrlDataConnector\/DataConnectors\/HttpConnector.php",
             "CONFIG": {
-                "cache_lifetime_in_seconds": "60",
+                "cache_lifetime_in_seconds": 60,
                 "cache_enabled": "true"
             },
-            "READONLY": "1",
+            "READONLY": 1,
             "ALIAS": "URL_READONLY_CACHED",
             "FILTER_CONTEXT": null
         }

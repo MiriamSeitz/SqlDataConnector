@@ -34,6 +34,7 @@ use exface\UrlDataConnector\DataConnectors\Authentication\HttpBasicAuth;
 use GuzzleHttp\Cookie\CookieJarInterface;
 use exface\Core\Events\Security\OnAuthenticationFailedEvent;
 use exface\UrlDataConnector\ModelBuilders\GenericUrlModelBuilder;
+use exface\Core\DataTypes\LogLevelDataType;
 
 /**
  * Connector for Websites, Webservices and other data sources accessible via HTTP, HTTPS, FTP, etc.
@@ -125,6 +126,10 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
     private $errorTextUseAsMessageTitle = null;
     
     private $errorCode = null;
+    
+    private $errorCodePattern = null;
+    
+    private $errorLevelPatterns = [];
 
     private $use_cookies = false;
     
@@ -143,6 +148,10 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
     private $client;
     
     private $swaggerUrl = null;
+    
+    private $sendRequestIdWithHeader = null;
+    
+    private $headers = [];
     
     // Authentication
     /**
@@ -300,6 +309,11 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
             $defaults['handler'] = $stack;
         }
         
+        // headers
+        if (! empty($this->getHeaders())) {
+            $defaults['headers'] = $this->getHeaders();
+        }
+        
         try {
             $this->setClient(new Client($defaults));
         } catch (\Throwable $e) {
@@ -435,6 +449,11 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
             }
         }
         
+        // Add the X-Request-ID header if required
+        if ($requestIdHeader = $this->getSendRequestIdWithHeader()) {
+            $request = $request->withHeader($requestIdHeader, $this->getWorkbench()->getContext()->getScopeRequest()->getRequestId());
+        }
+        
         // Now add everything related to authentication by pssing the request to the auth
         // provider.
         if ($this->hasAuthentication()) {
@@ -455,6 +474,7 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
         if ($response !== null) {
             $message = $this->getResponseErrorText($response, $exceptionThrown);
             $code = $this->getResponseErrorCode($response, $exceptionThrown);
+            $level = $this->getResponseErrorLevel($response);
             $ex = new HttpConnectorRequestError($query, $response->getStatusCode(), $response->getReasonPhrase(), $message, $code, $exceptionThrown);
             $useAsTitle = false;
             if ($this->getErrorTextUseAsMessageTitle() === true) {
@@ -472,6 +492,10 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
             // This will give facades the option to show a login-screen.
             if ($response->getStatusCode() == 401 && ! ($exceptionThrown instanceof AuthenticationFailedError)) {
                 $ex = $this->createAuthenticationException($ex, $message);
+            } else {
+                if ($level !== null) {
+                    $ex->setLogLevel($level);
+                }
             }
         } else {
             $ex = new HttpConnectorRequestError($query, 0, 'No Response from Server', $exceptionThrown->getMessage(), null, $exceptionThrown);
@@ -553,6 +577,9 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
      * 
      * WARNING: Don't use this together with `authentication` - the latter will always override!
      * 
+     * This property accepts either a value (i.e. the username itself) or a static formula to
+     * calculate it - e.g. `=User('USERNAME')`
+     * 
      * If set, the `authentication` will be automatically configured to use HTTP basic authentication.
      * If you need any special authentication options, use `authentication` instead. This option
      * here is just a handy shortcut!
@@ -585,12 +612,15 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
      * 
      * WARNING: Don't use this together with `authentication` - the latter will always override!
      * 
+     * This property accepts either a value (i.e. the password itself) or a static formula to
+     * calculate it - e.g. `=GetConfig('...')`
+     * 
      * If set, the `authentication` will be automatically configured to use HTTP basic authentication.
      * If you need any special authentication options, use `authentication` instead. This option
      * here is just a handy shortcut!
      * 
      * @uxon-property password
-     * @uxon-type password
+     * @uxon-type password|metamodel:formula
      *
      * @param string $value            
      * @return \exface\UrlDataConnector\DataConnectors\HttpConnector
@@ -823,7 +853,7 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
      */
     protected function getResponseErrorText(ResponseInterface $response, \Throwable $exceptionThrown = null) : string
     {
-        if ($pattern = $this->getErrorTextPattern()) {
+        if (null !== $pattern = $this->getErrorTextPattern()) {
             $body = $response->getBody()->__toString();
             $matches = [];
             preg_match($pattern, $body, $matches);
@@ -849,7 +879,37 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
      */
     protected function getResponseErrorCode(ResponseInterface $response, \Throwable $exceptionThrown = null) : ?string
     {
+        if (null !== $pattern = $this->getErrorCodePattern()) {
+            $body = $response->getBody()->__toString();
+            $matches = [];
+            preg_match($pattern, $body, $matches);
+            if (empty($matches) === false) {
+                return $matches['code'] ?? $matches[1];
+            }
+        }
+        
         return $this->getErrorCode();
+    }
+    
+    /**
+     * 
+     * @param ResponseInterface $response
+     * @return string|NULL
+     */
+    protected function getResponseErrorLevel(ResponseInterface $response) : ?string
+    {
+        $body = $response->getBody()->__toString();
+        foreach ($this->getErrorLevelPatterns() as $level => $pattern) {
+            if ($pattern === null || $pattern === '') {
+                continue;
+            }
+            $matches = [];
+            preg_match($pattern, $body, $matches);
+            if (empty($matches) === false) {
+                return LogLevelDataType::cast($level);
+            }
+        }
+        return null;
     }
     
     /**
@@ -934,7 +994,7 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
      *
      * @return string|NULL
      */
-    public function getErrorTextPattern() : ?string
+    protected function getErrorTextPattern() : ?string
     {
         return $this->errorTextPattern;
     }
@@ -962,6 +1022,10 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
      * `{"error":"Sorry, you are out of luck!"}`, you could use this regex to get the
      * message: `/"error":"(?<message>[^"]*)"/`.
      * 
+     * @uxon-property error_text_pattern
+     * @uxon-type string
+     * @uxon-template /"error":"([^"]*)"/
+     * 
      * @param string $value
      * @return HttpConnector
      */
@@ -975,7 +1039,7 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
      *
      * @return bool
      */
-    public function getErrorTextUseAsMessageTitle() : ?bool
+    protected function getErrorTextUseAsMessageTitle() : ?bool
     {
         return $this->errorTextUseAsMessageTitle;
     }
@@ -999,45 +1063,6 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
     public function setErrorTextUseAsMessageTitle(bool $value) : HttpConnector
     {
         $this->errorTextUseAsMessageTitle = $value;
-        return $this;
-    }
-    
-    /**
-     * 
-     * @return bool
-     */
-    protected function hasAuthentication() : bool
-    {
-        return $this->authProvider !== null || $this->authProviderUxon !== null || $this->user !== null || $this->password !== null;
-    }
-    
-    /**
-     * Set the authentication method this connection should use.
-     * 
-     * @uxon-property authentication
-     * @uxon-type \exface\UrlDataConnector\CommonLogic\AbstractHttpAuthenticationProvider
-     * @uxon-template {"class": "\\exface\\UrlDataConnector\\DataConnectors\\Authentication\\HttpBasicAuth"}
-     * 
-     * @param string $value
-     * @return HttpConnector
-     */
-    public function setAuthentication($stringOrUxon) : HttpConnector
-    {
-        if ($stringOrUxon instanceof UxonObject) {
-            $this->authProviderUxon = $stringOrUxon;
-            $this->authProvider = null;
-        } elseif (is_string($stringOrUxon)) {
-            if (defined('static::AUTH_TYPE_' . mb_strtoupper($stringOrUxon)) === false) {
-                throw new DataConnectionConfigurationError($this, 'Invalid value "' . $stringOrUxon . '" for connection property "authentication".');
-            }
-            $authType = mb_strtolower($stringOrUxon);
-            $this->authProviderUxon = new UxonObject([
-                'class' => '\\exface\\UrlDataConnector\\DataConnectors\\Authentication\\Http' . ucfirst($authType) . 'Auth'
-            ]);
-            $this->authProvider = null;
-        } else {
-            throw new DataConnectionConfigurationError($this, 'Invalid value "' . $stringOrUxon . '" for connection property "authentication".');
-        }
         return $this;
     }
     
@@ -1069,6 +1094,105 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
     public function setErrorCode(string $value) : HttpConnector
     {
         $this->errorCode = $value;
+        return $this;
+    }
+    
+    protected function getErrorCodePattern() : ?string
+    {
+        return $this->errorCodePattern;
+    }
+    
+    /**
+     * Use a regular expression to extract error codes from error responses - the first match is returned or one explicitly named "code".
+     * 
+     * By default, the action will use the error handler of the data connection to
+     * parse error responses from the web service. This will mostly produce general
+     * errors like "500 Internal Server Error". Using the `error_code_pattern`
+     * you can tell the action where to look for the actual error code an use
+     * it in the error it produces.
+     * 
+     * For example, if the web service would return the following JSON
+     * `{"errorCode":"2","error":"Sorry!"}`, you could use this regex to get the
+     * message: `/"errorCode":"(?<code>[^"]*)"/`.
+     * 
+     * @uxon-property error_code_pattern
+     * @uxon-type string
+     * @uxon-template /"errorCode":"([^"]*)"/
+     *
+     * @param string $value
+     * @return HttpConnector
+     */
+     public function setErrorCodePattern(string $value) : HttpConnector
+    {
+        $this->errorCodePattern = $value;
+        return $this;
+    }
+    
+    /**
+     * 
+     * @return string[]
+     */
+    protected function getErrorLevelPatterns() : array
+    {
+        return $this->errorLevelPatterns;
+    }
+    
+    /**
+     * Use regular expressions to customize log levels for errors.
+     * 
+     * You can specify a regular expression for every log level here. If an error response body matches
+     * one of them, the corresponding log level will be used. If multiple expressions match, the first
+     * one is selected in order of definition.
+     * 
+     * @uxon-property error_level_patterns
+     * @uxon-type object
+     * @uxon-template {"WARNING": "", "ERROR": "", "CRITICAL": "", "ALERT": "", "EMERGENCY": ""}
+     * 
+     * @param array $uxonArray
+     * @return HttpConnector
+     */
+    public function setErrorLevelPatterns(UxonObject $uxonArray) : HttpConnector
+    {
+        $this->errorLevelPatterns = $uxonArray->toArray();
+        return $this;
+    }
+    
+    /**
+     *
+     * @return bool
+     */
+    protected function hasAuthentication() : bool
+    {
+        return $this->authProvider !== null || $this->authProviderUxon !== null || $this->user !== null || $this->password !== null;
+    }
+    
+    /**
+     * Set the authentication method this connection should use.
+     *
+     * @uxon-property authentication
+     * @uxon-type \exface\UrlDataConnector\CommonLogic\AbstractHttpAuthenticationProvider
+     * @uxon-template {"class": "\\exface\\UrlDataConnector\\DataConnectors\\Authentication\\HttpBasicAuth"}
+     *
+     * @param string $value
+     * @return HttpConnector
+     */
+    public function setAuthentication($stringOrUxon) : HttpConnector
+    {
+        if ($stringOrUxon instanceof UxonObject) {
+            $this->authProviderUxon = $stringOrUxon;
+            $this->authProvider = null;
+        } elseif (is_string($stringOrUxon)) {
+            if (defined('static::AUTH_TYPE_' . mb_strtoupper($stringOrUxon)) === false) {
+                throw new DataConnectionConfigurationError($this, 'Invalid value "' . $stringOrUxon . '" for connection property "authentication".');
+            }
+            $authType = mb_strtolower($stringOrUxon);
+            $this->authProviderUxon = new UxonObject([
+                'class' => '\\exface\\UrlDataConnector\\DataConnectors\\Authentication\\Http' . ucfirst($authType) . 'Auth'
+            ]);
+            $this->authProvider = null;
+        } else {
+            throw new DataConnectionConfigurationError($this, 'Invalid value "' . $stringOrUxon . '" for connection property "authentication".');
+        }
         return $this;
     }
     
@@ -1242,5 +1366,63 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
         }
         
         return;
+    }
+    
+    /**
+     * 
+     * @return string|NULL
+     */
+    protected function getSendRequestIdWithHeader() : ?string
+    {
+        return $this->sendRequestIdWithHeader;
+    }
+    
+    /**
+     * If set, the request id used by the workbench internally will be sent with the speicified HTTP header.
+     * 
+     * The value of this property should be the header name (e.g. `X-Request-ID`) or
+     * `null`. The default is `null`, so not request id is forwarded to the data source.
+     * 
+     * Note, that this can result in multiple requests to the data source with the
+     * same id as the may result from the same request to the workbench (e.g. when
+     * reading multiple URLs into a single data set).
+     * 
+     * @uxon-property send_request_id_with_header
+     * @uxon-type string
+     * @uxon-template X-Request-ID
+     * @uxon-default null
+     * 
+     * @param string $value
+     * @return HttpConnector
+     */
+    public function setSendRequestIdWithHeader(?string $value) : HttpConnector
+    {
+        $this->sendRequestIdWithHeader = $value;
+        return $this;
+    }
+    
+    /**
+     * 
+     * @return array
+     */
+    protected function getHeaders() : array
+    {
+        return $this->headers;
+    }
+    
+    /**
+     * Headers to send with every request
+     * 
+     * @uxon-property headers
+     * @uxon-type object
+     * @uxon-template {"Accept": "application/json"}
+     * 
+     * @param UxonObject|array $value
+     * @return HttpConnector
+     */
+    protected function setHeaders($value) : HttpConnector
+    {
+        $this->headers = ($value instanceof UxonObject ? $value->toArray() : $value);
+        return $this;
     }
 }
