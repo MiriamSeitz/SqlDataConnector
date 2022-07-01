@@ -735,8 +735,10 @@ class CallWebService extends AbstractAction implements iCallService
         if (empty($matches)) {
             return null;
         }
-        
-        return $matches['message'] ?? $matches[1];
+        $msg = $matches['message'] ?? $matches[1];
+        //remove escaping characters
+        $msg = str_replace('\\', '', $msg);
+        return $msg;
     }
     
     /**
