@@ -737,7 +737,7 @@ class CallWebService extends AbstractAction implements iCallService
         }
         $msg = $matches['message'] ?? $matches[1];
         //remove escaping characters
-        $msg = str_replace('\\', '', $msg);
+        $msg = stripcslashes($msg);
         return $msg;
     }
     
