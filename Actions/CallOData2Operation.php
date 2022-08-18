@@ -53,7 +53,7 @@ class CallOData2Operation extends CallWebService
             $val = $parameter->getDefaultValue();
         }
         
-        if ($parameter->isRequired() === true && ($val === '' || $val === null)) {
+        if ($parameter->isRequired() && $parameter->getDataType()->isValueEmpty($val)) {
             throw new ActionInputMissingError($this, 'Value of required parameter "' . $parameter->getName() . '" not set! Please include the corresponding column in the input data or use an input_mapper!', '75C7YOQ');
         }
         
