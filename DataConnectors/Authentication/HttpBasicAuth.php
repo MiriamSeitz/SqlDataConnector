@@ -178,9 +178,9 @@ class HttpBasicAuth extends AbstractHttpAuthenticationProvider
     }
     
     /**
-     *
+     * 
      * {@inheritDoc}
-     * @see \exface\Core\Interfaces\DataSources\DataConnectionInterface::createLoginWidget()
+     * @see \exface\Core\Interfaces\Security\AuthenticationProviderInterface::createLoginWidget()
      */
     public function createLoginWidget(iContainOtherWidgets $loginForm, bool $saveCredentials = true, UserSelectorInterface $credentialsOwner = null) : iContainOtherWidgets
     {

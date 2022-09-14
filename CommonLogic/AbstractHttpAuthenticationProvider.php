@@ -6,6 +6,7 @@ use exface\UrlDataConnector\Interfaces\HttpConnectionInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\UrlDataConnector\Uxon\HttpAuthenticationSchema;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * Base class to implement interface HttpAuthenticationProviderInterface
@@ -76,5 +77,15 @@ abstract class AbstractHttpAuthenticationProvider implements HttpAuthenticationP
     public function getWorkbench()
     {
         return $this->connection->getWorkbench();
+    }
+    
+    /**
+     * 
+     * {@inheritDoc}
+     * @see \exface\UrlDataConnector\Interfaces\HttpAuthenticationProviderInterface::isResponseUnauthenticated()
+     */
+    public function isResponseUnauthenticated(ResponseInterface $response) : bool
+    {
+        return $response->getStatusCode() == 401;
     }
 }

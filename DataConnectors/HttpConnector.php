@@ -490,7 +490,12 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
             
             // Wrap the error in an authentication-exception if login failed.
             // This will give facades the option to show a login-screen.
-            if ($response->getStatusCode() == 401 && ! ($exceptionThrown instanceof AuthenticationFailedError)) {
+            if ($this->hasAuthentication()) {
+                $authFailed = $this->getAuthProvider()->isResponseUnauthenticated($response);
+            } else {
+                $authFailed = $response->getStatusCode() == 401;
+            }
+            if ($authFailed && ! ($exceptionThrown instanceof AuthenticationFailedError)) {
                 $ex = $this->createAuthenticationException($ex, $message);
             } else {
                 if ($level !== null) {

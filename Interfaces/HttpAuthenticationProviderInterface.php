@@ -6,6 +6,7 @@ use exface\Core\Interfaces\Security\AuthenticationProviderInterface;
 use exface\Core\Interfaces\Security\AuthenticationTokenInterface;
 use exface\Core\CommonLogic\UxonObject;
 use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
 
 /**
  * Interface for HTTP-based authentication providers
@@ -41,6 +42,14 @@ interface HttpAuthenticationProviderInterface extends iCanBeConvertedToUxon, Aut
      * @return RequestInterface
      */
     public function signRequest(RequestInterface $request) : RequestInterface;
+    
+    /**
+     * Returns TRUE if the response needs authenticatino (should shoul login form) and FALSE otherwise.
+     * 
+     * @param ResponseInterface $response
+     * @return bool
+     */
+    public function isResponseUnauthenticated(ResponseInterface $response) : bool;
     
     /**
      * 
