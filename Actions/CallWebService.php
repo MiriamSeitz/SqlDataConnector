@@ -332,7 +332,7 @@ class CallWebService extends AbstractAction implements iCallService
         $body = $this->getBody();
         
         if ($body === null) {
-            if (strcasecmp($this->getMethod(), 'GET') !== 0) {
+            if ($this->getDefaultParameterGroup() === self::PARAMETER_GROUP_BODY) {
                 return $this->buildBodyFromParameters($data, $rowNr);
             } else {
                 return '';
@@ -348,7 +348,6 @@ class CallWebService extends AbstractAction implements iCallService
         foreach ($placeholders as $ph) {
             $requiredParams[] = $this->getParameter($ph);
         }
-        $data = $this->getDataWithParams($data, $requiredParams);
         
         $phValues = [];
         foreach ($requiredParams as $param) {
@@ -438,6 +437,9 @@ class CallWebService extends AbstractAction implements iCallService
         if ($rowCnt === 0 && $this->getInputRowsMin() === 0) {
             $rowCnt = 1;
         }
+        
+        // Make sure all required parameters are present in the data
+        $input = $this->getDataWithParams($input, $this->getParameters());  
         
         // Call the webservice for every row in the input data.
         $httpConnection = $this->getDataConnection();
@@ -532,10 +534,7 @@ class CallWebService extends AbstractAction implements iCallService
     protected function buildUrl(DataSheetInterface $data, int $rowNr) : string
     {
         $url = $this->getUrl();
-        
-        if ($this->getMethod() === 'GET') {
-            $url = $this->buildUrlParams($url, $data, $rowNr);
-        }
+        $url = $this->buildUrlParams($url, $data, $rowNr);
         
         return $url ?? '';
     }
@@ -573,8 +572,7 @@ class CallWebService extends AbstractAction implements iCallService
     protected function buildUrlParams(string $url, DataSheetInterface $data, int $rowNr) : string
     {
         $params = '';
-        $urlPlaceholders = StringDataType::findPlaceholders($url);
-        $data = $this->getDataWithParams($data, $this->getParameters());        
+        $urlPlaceholders = StringDataType::findPlaceholders($url);      
         
         $urlPhValues = [];
         foreach ($this->getParameters() as $param) {
@@ -586,8 +584,9 @@ class CallWebService extends AbstractAction implements iCallService
             $val = $this->prepareParamValue($param, $val) ?? '';
             if (in_array($param->getName(), $urlPlaceholders) === true) {
                 $urlPhValues[$name] = $val;
+            } else {
+                $params .= '&' . urlencode($name) . '=' . urlencode($val);
             }
-            $params .= '&' . urlencode($name) . '=' . urlencode($val);
         }
         if (empty($urlPhValues) === false) {
             $url = StringDataType::replacePlaceholders($url, $urlPhValues);
@@ -831,5 +830,15 @@ class CallWebService extends AbstractAction implements iCallService
     public function getEffects() : array
     {
         return array_merge(parent::getEffects(), $this->getEffectsFromModel());
+    }
+    
+    /**
+     * 
+     * @return string
+     */
+    protected function getDefaultParameterGroup() : string
+    {
+        $m = mb_strtoupper($this->getMethod());
+        return $m === 'GET' || $m === 'OPTIONS' ? self::PARAMETER_GROUP_URL : self::PARAMETER_GROUP_BODY;
     }
 }
