@@ -162,6 +162,9 @@ use exface\UrlDataConnector\DataConnectors\HttpConnector;
  */
 class CallWebService extends AbstractAction implements iCallService 
 {
+    const PARAMETER_GROUP_BODY = 'body';
+    
+    const PARAMETER_GROUP_URL = 'url';
     
     /**
      * @var ServiceParameterInterface[]
@@ -373,6 +376,9 @@ class CallWebService extends AbstractAction implements iCallService
             case stripos($contentType, 'json') !== false:
                 $params = [];
                 foreach ($this->getParameters() as $param) {
+                    if ($param->getGroup() !== null && $param->getGroup() !== self::PARAMETER_GROUP_BODY) {
+                        continue;
+                    }
                     $name = $param->getName();
                     $val = $data->getCellValue($name, $rowNr);
                     $val = $this->prepareParamValue($param, $val) ?? '';
@@ -572,6 +578,9 @@ class CallWebService extends AbstractAction implements iCallService
         
         $urlPhValues = [];
         foreach ($this->getParameters() as $param) {
+            if ($param->getGroup() !== null && $param->getGroup() !== self::PARAMETER_GROUP_URL) {
+                continue;
+            }
             $name = $param->getName();
             $val = $data->getCellValue($name, $rowNr);
             $val = $this->prepareParamValue($param, $val) ?? '';
@@ -610,18 +619,21 @@ class CallWebService extends AbstractAction implements iCallService
      *
      * @return ServiceParameterInterface[]
      */
-    public function getParameters() : array
+    public function getParameters(string $group = null) : array
     {
         if ($this->parametersGeneratedFromPlaceholders === false) {
             $this->parametersGeneratedFromPlaceholders = true;
-            $phs = array_merge(StringDataType::findPlaceholders($this->getUrl()), StringDataType::findPlaceholders($this->getBody()));
+            $bodyPhs = StringDataType::findPlaceholders($this->getBody());
+            $urlPhs = StringDataType::findPlaceholders($this->getUrl());
+            $phs = array_merge($urlPhs, $bodyPhs);
             foreach ($phs as $ph) {
                 try {
                     $this->getParameter($ph);
                 } catch (ActionInputMissingError $e) {
                     $this->parameters[] = new ServiceParameter($this, new UxonObject([
                         "name" => $ph,
-                        "required" => true
+                        "required" => true, 
+                        "group" => in_array($ph, $urlPhs) ? self::PARAMETER_GROUP_URL : self::PARAMETER_GROUP_BODY 
                     ]));
                 }
             }
