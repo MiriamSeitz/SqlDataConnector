@@ -29,17 +29,52 @@ use exface\Core\Exceptions\Security\AuthenticationFailedError;
 use exface\UrlDataConnector\DataConnectors\HttpConnector;
 
 /**
- * Calls a generic web service using parameters to fill placeholders in the URL and body.
+ * Calls a web service using parameters to fill placeholders in the URL and body of the HTTP request.
  * 
- * This action can fill placeholders in the URL and request body to call a web service.
- * The placeholders are replaced values from the action's input data: the placeholder's
- * name must match one of the data column names of the input data.
+ * This action will send an HTTP request for every row of the input data. The action model allows 
+ * to customize common HTTP request properties: `url`, `method`, `body`, `headers`.
  * 
- * For multiple data items (e.g. a table with multi-select), the webservice is called
- * multiple times: once per data row, so to say.
+ * The `url` and the `body` can be templates with placeholders. These will be automatically treated as
+ * action parameters and will get filled with input data when the action is performed. Placeholders
+ * must match column names here! 
  * 
- * You can customize the result message produced by the action using the following
- * properties:
+ * Alternatively, you can use `parameters` and let the action generate URL params and body automatically. 
+ * Parameters are much more flexible than simple placeholders because they can have data types, default
+ * values, required flags, etc. However, only certian body content types can be generated automatically: 
+ * `application/json` and `application/x-www-form-urlencoded`.
+ * 
+ * You can also mix both approaches: define a parameter with the name of a placehodler an you will will
+ * be able to control the data type of the placeholder, etc.
+ * 
+ * ## Parameters
+ * 
+ * Each parameter defines a possible input value of the action. Parameters have unique names and always
+ * belong to one of these groups: `url` parameters and `body` parameters. The name of a parameter must
+ * match a column name (it is not always the same as an attribute alias!) in the actions input.
+ * 
+ * If the `group` of a parameter is ommitted, it will depend on the request method: parameters of 
+ * GET-requests are treated as URL-parameters, while POST-parameters will be placed in the body.
+ * 
+ * In contrast to placehodlers, parameters allow customization like setting a data type, being required
+ * and optional, etc.
+ * 
+ * ## Placeholders
+ * 
+ * Placeholders can be used anywhere in the URL or the body. If there is no parameter with the same
+ * name defined, the placeholder will be treated as a simple string parameter of the respective group.
+ * 
+ * You may say, placeholders are a short and explicit way to define parameters.
+ * 
+ * Complex request bodies may require both: placeholders and parameters with the same name.
+ * 
+ * ## Action result
+ * 
+ * The result of `CallWebservice` consists of a messsage and a data sheet. The data sheet is based
+ * on the actions object and will be empty by default. However, more specialized actions like
+ * `CallOData2Operation` may also yield meaningful data.
+ * 
+ * In the most generic case, you can use the following action properties to extract a result message
+ * from the HTTP response:
  * 
  * - `result_message_pattern` - a regular expression to extract the result message from
  * the response - see examples below.
@@ -49,9 +84,10 @@ use exface\UrlDataConnector\DataConnectors\HttpConnector;
  * text will be prepended to the extracted result. This is usefull for web services, that
  * respond with pure data - e.g. an importer serves, that returns the number of items imported.
  * 
- * Similarly, you can make error messages look for information in the error response
- * if the web service produce more informative errors than the generic errors in the
- * data connectors.
+ * ## Error messages
+ * 
+ * Similarly, you can make make the action look for error messages in the HTTP response
+ * if the web service produces informative.
  * 
  * - `error_message_pattern` - a regular expression to find the error message (this will
  * make this error message visible to the users!)
@@ -60,16 +96,15 @@ use exface\UrlDataConnector\DataConnectors\HttpConnector;
  * 
  * ## Examples
  * 
- * ### A simple GET-webservice with a required parameter 
+ * ### Simple GET-request with placeholders 
  * 
  * The service returns the following JSON if successfull: `{"result": "Everything OK"}`.
  * 
  * ```
- * {
- *  "url": "http://url.toyouservice.com/service?param1=[#param1_data_column#]",
- *  "result_message_pattern": "\"result":"(?<message>[^"]*)\""
- * 
- * }
+ *  {
+ *      "url": "http://url.toyouservice.com/service?param1=[#param1_data_column#]",
+ *      "result_message_pattern": "/\"result":"(?<message>[^"]*)\"/i"
+ *  }
  * 
  * ```
  * 
@@ -83,7 +118,7 @@ use exface\UrlDataConnector\DataConnectors\HttpConnector;
  * the response body (i.e. "Everything OK"), that will be shown to the user once 
  * the service responds.
  * 
- * ### A GET-Service with typed and optional parameters
+ * ### GET-request with typed and optional parameters
  * 
  * If you need optional URL parameters or require type checking, you can use the
  * `parameters` property of the action to add detailed information about each
@@ -101,7 +136,7 @@ use exface\UrlDataConnector\DataConnectors\HttpConnector;
  * ```
  * {
  *  "url": "http://url.toyouservice.com/service",
- *  "result_message_pattern": "\"result":"(?<message>[^"]*)\"",
+ *  "result_message_pattern": "/\"result":"(?<message>[^"]*)\"/i",
  *  "parameters": [
  *      {
  *          "name": "param1",
@@ -109,8 +144,7 @@ use exface\UrlDataConnector\DataConnectors\HttpConnector;
  *          "data_type": {
  *              "alias": "exface.Core.Integer"
  *          }
- *      },
- *      {
+ *      },{
  *          "name": "mode",
  *          "data_type": {
  *              "alias": "exface.Core.GenericStringEnum",
@@ -125,37 +159,77 @@ use exface\UrlDataConnector\DataConnectors\HttpConnector;
  * 
  * ```
  * 
- * You can mix placeholders and explicitly defined parameters. In this case, if no parameter
+ * You can even mix placeholders and explicitly defined parameters. In this case, if no parameter
  * name matches a placeholder's name, a new simple string parameter will be generated
  * automatically.
  * 
- * ### A POST-service with a body-template
+ * ### POST-request with a JSON body-template
  * 
- * Similarly to URLs in GET-services, placeholders can be used in the body of the request
- * to a POST-service. Since the generic `CallWebService` only supports plain text body
- * templates, placeholders must be used for every parameter! In contrast to the URL parameter,
- * body parameter cannot be added automatically and, thus, cannot be optional.
+ * Similarly to URLs in GET-requests, placeholders can be used in the body of a POST request. 
  * 
  * The following code shows a POST-version of the first GET-example above.
  * 
  * ```
- * {
- *  "url": "http://url.toyouservice.com/service",
- *  "result_message_pattern": "\"result":"(?<message>[^"]*)\"",
- *  "method": "POST",
- *  "Content-Type": "application/json",
- *  "body": "{\"param1\": \"[#param1_data_column#]\"}"
- * }
+ *  {
+ *      "url": "http://url.toyouservice.com/service",
+ *      "result_message_pattern": "/\"result":"(?<message>[^"]*)\"/i",
+ *      "method": "POST",
+ *      "content_type": "application/json",
+ *      "body": "{"data": {\"param1\": \"[#param1_data_column#]\"}}"
+ *  }
  * 
  * ```
  * 
- * Note the extra `Content-Type` header: most web services will require such a header, so it is
- * a good idea to set it in the action's configuration - in this case, the body is a JSON, so
- * we use the default JSON content type.
+ * Note the extra `content_type` property: this is the same as setting a `Content-Type` header in the
+ * request. Most web services will require such a header, so it is a good idea to set it in the action's 
+ * configuration. You can also use the `headers` property for even more customization.
  * 
- * You can also used the detailed `parameters` definition with POST requests - just make sure,
- * the placeholder name matches the parameter name. Placeholders, that are not in the `parameters`
- * list will be automatically treated as additional string parameters.
+ * The more detailed `parameters` definition can be used with templated POST requests too - just make sure,
+ * the placeholder names in the template match parameter names. However, placeholders, that are not in the 
+ * `parameters` list will be ignored here because the action cannot know where to put the in the template.
+ * 
+ * ### POST-request with parameters and a generated form data body
+ * 
+ * An alternative to the use of `body` templates is to have the body generated from parameters. This only
+ * works for content types `application/x-www-form-urlencoded` and `application/json`. In this
+ * case you can define required and optional parameters and the correspoinding fields of the body will
+ * appear accordingly.
+ * 
+ * POST requests may have placeholders in the body and in the URL at the same time. The corresponding parameters
+ * will belong to respective groups `url` and `body` then. Thus, you can explicitly control, which part of
+ * the request a parameter is meant for.
+ * 
+ * ```
+ * {
+ *  "url": "http://url.toyouservice.com/[#endpoint#]",
+ *  "result_message_pattern": "\"result":"(?<message>[^"]*)\"",
+ *  "content_type": "application/x-www-form-urlencoded",
+ *  "parameters": [
+ *      {
+ *          "name": "endpoint",
+ *          "group": "url"
+ *      },{
+ *          "name": "param1",
+ *          "group": "body",
+ *          "required": true,
+ *          "data_type": {
+ *              "alias": "exface.Core.Integer"
+ *          }
+ *      },{
+ *          "name": "mode",
+ *          "group": "body",
+ *          "data_type": {
+ *              "alias": "exface.Core.GenericStringEnum",
+ *              "values": {
+ *                  "mode1": "Mode 1",
+ *                  "mode2": "Mode 2"
+ *              }
+ *          }
+ *      }
+ *  ]
+ * }
+ * 
+ * ```
  * 
  * @author Andrej Kabachnik
  *
@@ -187,6 +261,8 @@ class CallWebService extends AbstractAction implements iCallService
     private $method = null;
     
     /**
+     * Array of HTTP headers with lowercased header names
+     * 
      * @var string[]
      */
     private $headers = [];
@@ -233,10 +309,11 @@ class CallWebService extends AbstractAction implements iCallService
     }
 
     /**
-     * The URL to call: absolute or relative to the data source.
+     * The URL to call: absolute or relative to the data source - supports [#placeholders#].
      * 
-     * If the data source is not specified directly via `data_source_alias`, the data source
-     * of the action's meta object will be used.
+     * Any `parameters` with group `url` will be appended to the URL automatically. If there
+     * are parameters without a group, they will be treated as URL parameters for request
+     * methods, that typically do not have a body - e.g. `GET` and `OPTIONS`.
      * 
      * @uxon-property url
      * @uxon-type uri
@@ -292,7 +369,7 @@ class CallWebService extends AbstractAction implements iCallService
         $headers = $this->getHeaders();
         
         if ($this->getContentType() !== null) {
-            $headers['Content-Type'] = $this->getContentType();
+            $headers['content-type'] = $this->getContentType();
         }
         
         return $headers;
@@ -310,7 +387,7 @@ class CallWebService extends AbstractAction implements iCallService
     public function setHeaders($uxon_or_array) : CallWebService
     {
         if ($uxon_or_array instanceof UxonObject) {
-            $this->headers = $uxon_or_array->toArray();
+            $this->headers = $uxon_or_array->toArray(CASE_LOWER);
         } elseif (is_array($uxon_or_array)) {
             $this->headers = $uxon_or_array;
         } else {
@@ -375,7 +452,7 @@ class CallWebService extends AbstractAction implements iCallService
             case stripos($contentType, 'json') !== false:
                 $params = [];
                 foreach ($this->getParameters() as $param) {
-                    if ($param->getGroup() !== null && $param->getGroup() !== self::PARAMETER_GROUP_BODY) {
+                    if ($param->getGroup($this->getDefaultParameterGroup()) === self::PARAMETER_GROUP_BODY) {
                         continue;
                     }
                     $name = $param->getName();
@@ -387,6 +464,9 @@ class CallWebService extends AbstractAction implements iCallService
                 break;
             case strcasecmp($contentType, 'application/x-www-form-urlencoded') === 0:
                 foreach ($this->getParameters() as $param) {
+                    if ($param->getGroup($this->getDefaultParameterGroup()) === self::PARAMETER_GROUP_BODY) {
+                        continue;
+                    }
                     $name = $param->getName();
                     $val = $data->getCellValue($name, $rowNr);
                     $val = $this->prepareParamValue($param, $val) ?? '';
@@ -407,7 +487,13 @@ class CallWebService extends AbstractAction implements iCallService
     }
 
     /**
-     * The body of the HTTP request; [#placeholders#] are supported.
+     * The body of the HTTP request - [#placeholders#] are supported.
+     * 
+     * If no body template is specified, the body will be generated automatically for
+     * content types `application/json` and `application/x-www-form-urlencoded` - this
+     * autogenerated body will contain all parameters, that belong to the `body` group.
+     * If there are parameters without a group, they will be treated as URL parameters 
+     * for request methods, that typically do not have a body - e.g. `GET` and `OPTIONS`.
      * 
      * @uxon-property body
      * @uxon-type string
@@ -513,6 +599,9 @@ class CallWebService extends AbstractAction implements iCallService
     /**
      * Use this the connector of this data source to call the web service.
      * 
+     * If the data source is not specified directly via `data_source_alias`, the data source
+     * of the action's meta object will be used.
+     * 
      * @uxon-property data_source_alias
      * @uxon-type metamodel:data_source
      * 
@@ -533,10 +622,29 @@ class CallWebService extends AbstractAction implements iCallService
      */
     protected function buildUrl(DataSheetInterface $data, int $rowNr) : string
     {
-        $url = $this->getUrl();
-        $url = $this->buildUrlParams($url, $data, $rowNr);
+        $url = $this->getUrl() ?? '';
+        $params = '';
+        $urlPlaceholders = StringDataType::findPlaceholders($url);
         
-        return $url ?? '';
+        $urlPhValues = [];
+        foreach ($this->getParameters() as $param) {
+            if ($param->getGroup($this->getDefaultParameterGroup()) !== null && $param->getGroup() !== self::PARAMETER_GROUP_URL) {
+                continue;
+            }
+            $name = $param->getName();
+            $val = $data->getCellValue($name, $rowNr);
+            $val = $this->prepareParamValue($param, $val) ?? '';
+            if (in_array($param->getName(), $urlPlaceholders) === true) {
+                $urlPhValues[$name] = $val;
+            } else {
+                $params .= '&' . urlencode($name) . '=' . urlencode($val);
+            }
+        }
+        if (empty($urlPhValues) === false) {
+            $url = StringDataType::replacePlaceholders($url, $urlPhValues);
+        }
+        
+        return $url . (strpos($url, '?') === false ? '?' : '') . $params;
     }
     
     /**
@@ -561,38 +669,6 @@ class CallWebService extends AbstractAction implements iCallService
             $data->dataRead();
         }
         return $data;
-    }
-    
-    /**
-     * 
-     * @param DataSheetInterface $data
-     * @param int $rowNr
-     * @return string
-     */
-    protected function buildUrlParams(string $url, DataSheetInterface $data, int $rowNr) : string
-    {
-        $params = '';
-        $urlPlaceholders = StringDataType::findPlaceholders($url);      
-        
-        $urlPhValues = [];
-        foreach ($this->getParameters() as $param) {
-            if ($param->getGroup() !== null && $param->getGroup() !== self::PARAMETER_GROUP_URL) {
-                continue;
-            }
-            $name = $param->getName();
-            $val = $data->getCellValue($name, $rowNr);
-            $val = $this->prepareParamValue($param, $val) ?? '';
-            if (in_array($param->getName(), $urlPlaceholders) === true) {
-                $urlPhValues[$name] = $val;
-            } else {
-                $params .= '&' . urlencode($name) . '=' . urlencode($val);
-            }
-        }
-        if (empty($urlPhValues) === false) {
-            $url = StringDataType::replacePlaceholders($url, $urlPhValues);
-        }
-        
-        return $url . (strpos($url, '?') === false ? '?' : '') . $params;
     }
     
     /**
@@ -766,7 +842,7 @@ class CallWebService extends AbstractAction implements iCallService
      */
     public function getContentType() : ?string
     {
-        return $this->contentType;
+        return $this->contentType ?? ($this->headers['content-type'] ?? null);
     }
     
     /**
