@@ -452,7 +452,7 @@ class CallWebService extends AbstractAction implements iCallService
             case stripos($contentType, 'json') !== false:
                 $params = [];
                 foreach ($this->getParameters() as $param) {
-                    if ($param->getGroup($this->getDefaultParameterGroup()) === self::PARAMETER_GROUP_BODY) {
+                    if ($param->getGroup($this->getDefaultParameterGroup()) !== self::PARAMETER_GROUP_BODY) {
                         continue;
                     }
                     $name = $param->getName();
@@ -464,7 +464,7 @@ class CallWebService extends AbstractAction implements iCallService
                 break;
             case strcasecmp($contentType, 'application/x-www-form-urlencoded') === 0:
                 foreach ($this->getParameters() as $param) {
-                    if ($param->getGroup($this->getDefaultParameterGroup()) === self::PARAMETER_GROUP_BODY) {
+                    if ($param->getGroup($this->getDefaultParameterGroup()) !== self::PARAMETER_GROUP_BODY) {
                         continue;
                     }
                     $name = $param->getName();
