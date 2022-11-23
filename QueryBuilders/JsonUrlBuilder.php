@@ -205,9 +205,9 @@ class JsonUrlBuilder extends AbstractUrlBuilder
      * 
      * @param QueryPartValue $qpart
      * @param mixed $value
-     * @return string
+     * @return mixed
      */
-    protected function buildRequestBodyValue(QueryPartValue $qpart, $value) : string
+    protected function buildRequestBodyValue(QueryPartValue $qpart, $value)
     {
         return $value;
     }

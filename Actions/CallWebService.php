@@ -675,9 +675,9 @@ class CallWebService extends AbstractAction implements iCallService
      * 
      * @param ServiceParameterInterface $parameter
      * @param mixed $val
-     * @return string
+     * @return mixed
      */
-    protected function prepareParamValue(ServiceParameterInterface $parameter, $val) : ?string
+    protected function prepareParamValue(ServiceParameterInterface $parameter, $val)
     {
         if ($parameter->hasDefaultValue() === true && $val === null) {
             $val = $parameter->getDefaultValue();

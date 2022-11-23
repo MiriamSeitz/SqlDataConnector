@@ -521,9 +521,9 @@ class OData2JsonUrlBuilder extends JsonUrlBuilder
      * @param string|null $parsedValue
      * @param DataTypeInterface $dataType
      * @param string $odataType
-     * @return string
+     * @return mixed
      */
-    public static function buildRequestBodyODataValue($parsedValue, DataTypeInterface $dataType, string $odataType = null) : string
+    public static function buildRequestBodyODataValue($parsedValue, DataTypeInterface $dataType, string $odataType = null)
     {
         switch (true) {
             // NULL
@@ -675,7 +675,7 @@ class OData2JsonUrlBuilder extends JsonUrlBuilder
      * {@inheritDoc}
      * @see \exface\UrlDataConnector\QueryBuilders\JsonUrlBuilder::buildRequestBodyValue()
      */
-    protected function buildRequestBodyValue(QueryPartValue $qpart, $value) : string
+    protected function buildRequestBodyValue(QueryPartValue $qpart, $value)
     {
         return $this::buildRequestBodyODataValue($value, $qpart->getDataType(), $qpart->getDataAddressProperty(static::DAP_ODATA_TYPE));
     }
