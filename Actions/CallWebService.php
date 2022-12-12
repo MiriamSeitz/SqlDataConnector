@@ -628,7 +628,7 @@ class CallWebService extends AbstractAction implements iCallService
         
         $urlPhValues = [];
         foreach ($this->getParameters() as $param) {
-            if ($param->getGroup($this->getDefaultParameterGroup()) !== null && $param->getGroup() !== self::PARAMETER_GROUP_URL) {
+            if ($param->getGroup($this->getDefaultParameterGroup()) !== null && $param->getGroup($this->getDefaultParameterGroup()) !== self::PARAMETER_GROUP_URL) {
                 continue;
             }
             $name = $param->getName();
