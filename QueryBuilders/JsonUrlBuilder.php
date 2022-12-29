@@ -301,9 +301,17 @@ class JsonUrlBuilder extends AbstractUrlBuilder
                 break;
             case ($qpartAttr = $qpart->getAttribute()) && $qpartAttr instanceof CompoundAttributeInterface:
                 $val = '';
+                // If the compound attribute is not based on the same object, give it a separate query. It
+                // will not really be used, but it is neccessary, that query parts created in the below
+                // foreach() have a query based on the right object.
+                if ($qpartAttr->isRelated() && $qpartAttr->getObject() !== $this->getMainObject()) {
+                    $qpartQuery = (new self($this->getSelector()))->setMainObject($qpartAttr->getObject());
+                } else {
+                    $qpartQuery = $this;
+                }
                 foreach ($qpartAttr->getComponents() as $component) {
                     $compAttr = $component->getAttribute();
-                    $compQpart = new QueryPartAttribute($compAttr->getAlias(), $qpart->getQuery());
+                    $compQpart = new QueryPartAttribute($compAttr->getAlias(), $qpartQuery);
                     $val .= $component->getValuePrefix() . $this->getValueFromRow($compQpart, $row) . $component->getValueSuffix();
                 }
                 break;

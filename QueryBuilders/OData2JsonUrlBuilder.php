@@ -966,7 +966,19 @@ BODY;
                 if (array_key_exists($navProp, $row) === false) {
                     throw new QueryBuilderException('Cannot read attribute "' . $attr->getName() . '" (alias ' . $attr->getAliasWithRelationPath() . ') from $expand: not data found for key "' . $navProp . '"');
                 }
+                // If it is a valid navigation property, replace $row with the contents of the
+                // navigation property.
                 $row = $row[$navProp] ?? [];
+                // Depending on the OData source (e.g. SAP version, navigation config, etc.), the value 
+                // of the property may be the nested data itself or another OData results set like
+                // `{"results": [{"__metadata": "...", "prop1": "val1"}]}`.
+                if (array_key_exists('results', $row) && ! array_key_exists('__metadata', $row)) {
+                    if (is_array($row['results']) && count($row['results']) === 1) {
+                        $row = $row['results'][0];
+                    } else {
+                        throw new QueryBuilderException('Cannot read attribute "' . $attr->getName() . '" (alias ' . $attr->getAliasWithRelationPath() . ') from $expand: invalid format of nested data "' . StringDataType::truncate(json_encode($row), 50, false, true, true) . '"');
+                    }
+                }
             }
         }
         return parent::getValueFromRow($qpart, $row);
