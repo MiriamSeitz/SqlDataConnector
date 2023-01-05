@@ -23,10 +23,9 @@ use exface\Core\Factories\DataSourceFactory;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\Actions\ActionInputMissingError;
 use exface\Core\CommonLogic\Constants\Icons;
-use exface\UrlDataConnector\Exceptions\HttpConnectorRequestError;
-use exface\Core\Interfaces\Exceptions\AuthenticationExceptionInterface;
-use exface\Core\Exceptions\Security\AuthenticationFailedError;
 use exface\UrlDataConnector\DataConnectors\HttpConnector;
+use exface\Core\CommonLogic\Debugger\LogBooks\ActionLogBook;
+use exface\Core\Exceptions\Actions\ActionRuntimeError;
 
 /**
  * Calls a web service using parameters to fill placeholders in the URL and body of the HTTP request.
@@ -515,6 +514,7 @@ class CallWebService extends AbstractAction implements iCallService
     protected function perform(TaskInterface $task, DataTransactionInterface $transaction): ResultInterface
     {
         $input = $this->getInputDataSheet($task);
+        $logbook = $this->getLogBook($task);
         
         $resultData = DataSheetFactory::createFromObject($this->getResultObject());
         $resultData->setAutoCount(false);
@@ -525,18 +525,26 @@ class CallWebService extends AbstractAction implements iCallService
         }
         
         // Make sure all required parameters are present in the data
-        $input = $this->getDataWithParams($input, $this->getParameters());  
+        $params = $this->getParameters();
+        $logbook->addLine('Found ' . count($params) . ' service parameters. Checking if input data has all required parameters', 1, 0);
+        $input = $this->getDataWithParams($input, $params, $logbook);  
         
         // Call the webservice for every row in the input data.
         $httpConnection = $this->getDataConnection();
+        $logbook->addLine('Firing HTTP requests for ' . $rowCnt . ' input rows', 1);
         for ($i = 0; $i < $rowCnt; $i++) {
             $request = new Request($this->getMethod(), $this->buildUrl($input, $i), $this->buildHeaders(), $this->buildBody($input, $i));
             $query = new Psr7DataQuery($request);
             // Perform the query regularly via URL connector
-            $response = $httpConnection->query($query)->getResponse();
+            try {
+                $response = $httpConnection->query($query)->getResponse();
+            } catch (\Throwable $e) {
+                throw new ActionRuntimeError($this, 'Error in remote web service call #' . ($i+1) . ': ' . $e->getMessage(), null, $e);
+            }
+            $resultCntPrev = $resultData->countRows();
+            $resultData = $this->parseResponse($response, $resultData);
+            $logbook->addLine('Request ' . ($i+1) . ' returned ' . ($resultData->countRows() - $resultCntPrev) . ' data rows', 2);
         }
-        
-        $resultData = $this->parseResponse($response, $resultData);
         $resultData->setCounterForRowsInDataSource($resultData->countRows());
         
         // If the input and the result are based on the same meta object, we can (and should!)
@@ -544,12 +552,15 @@ class CallWebService extends AbstractAction implements iCallService
         // merely means, we need to fill the sheet with data, which, of course, should adhere
         // to its settings.
         if ($input->getMetaObject()->is($resultData->getMetaObject())) {
+            $logbook->addLine('Filters and sorters will be applied to result data', 1);
             if ($input->getFilters()->isEmpty(true) === false) {
                 $resultData = $resultData->extract($input->getFilters());
             }
             if ($input->hasSorters() === true) {
                 $resultData->sort($input->getSorters());
             }
+        } else {
+            $logbook->addLine('Filters and sorters will NOT be applied to result data because input and result are based on different meta objects: ' . $input->getMetaObject()->__toString() . ' vs ' . $resultData->getMetaObject()->__toString(), 1);
         }
         
         if ($this->getResultMessageText() && $this->getResultMessagePattern()) {
@@ -652,19 +663,25 @@ class CallWebService extends AbstractAction implements iCallService
      * @param DataSheetInterface $data
      * @return DataSheetInterface
      */
-    protected function getDataWithParams(DataSheetInterface $data, array $parameters) : DataSheetInterface
+    protected function getDataWithParams(DataSheetInterface $data, array $parameters, ActionLogBook $logbook) : DataSheetInterface
     {
         foreach ($parameters as $param) {
             if (! $data->getColumns()->get($param->getName())) {
                 if ($data->getMetaObject()->hasAttribute($param->getName()) === true) {
                     if ($data->hasUidColumn(true) === true) {
+                        $logbook->addLine('Loading "' . $param->getName() . '" additionally', 2);
                         $attr = $data->getMetaObject()->getAttribute($param->getName());
                         $data->getColumns()->addFromAttribute($attr);
+                    } elseif ($param->isRequired()) {
+                        $logbook->addLine('Missing "' . $param->getName() . '", but cannot load it because there are no UIDs', 2);
                     }
+                } elseif ($param->isRequired()) {
+                    $logbook->addLine('Missing "' . $param->getName() . '", but it is not an attribute of the object ' . $data->getMetaObject()->__toString(), 2);
                 }
             }
         }
         if ($data->isFresh() === false && $data->hasUidColumn(true)) {
+            $logbook->addLine('Loading missing data', 2);
             $data->getFilters()->addConditionFromColumnValues($data->getUidColumn());
             $data->dataRead();
         }
