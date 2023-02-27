@@ -36,9 +36,9 @@ class CallOData2Operation extends CallWebService
      * {@inheritDoc}
      * @see \exface\UrlDataConnector\Actions\CallWebService::buildUrl()
      */
-    protected function buildUrl(DataSheetInterface $data, int $rowNr) : string
+    protected function buildUrl(DataSheetInterface $data, int $rowNr, string $method) : string
     {
-        $url = parent::buildUrl($data, $rowNr);
+        $url = parent::buildUrl($data, $rowNr, $method);
         return $url . (strpos($url, '?') === false ? '?' : '') . '&$format=json';
     }
     
