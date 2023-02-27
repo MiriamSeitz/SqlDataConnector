@@ -401,15 +401,15 @@ class CallWebService extends AbstractAction implements iCallService
      * 
      * @param DataSheetInterface $data
      * @param int $rowNr
+     * @param $method
      * @return string
      */
-    protected function buildBody(DataSheetInterface $data, int $rowNr) : string
+    protected function buildBody(DataSheetInterface $data, int $rowNr, string $method) : string
     {
         $body = $this->getBody();
-        
         if ($body === null) {
-            if ($this->getDefaultParameterGroup() === self::PARAMETER_GROUP_BODY) {
-                return $this->buildBodyFromParameters($data, $rowNr);
+            if ($this->getDefaultParameterGroup($method) === self::PARAMETER_GROUP_BODY) {
+                return $this->buildBodyFromParameters($data, $rowNr, $method);
             } else {
                 return '';
             }
@@ -437,21 +437,42 @@ class CallWebService extends AbstractAction implements iCallService
     }
     
     /**
-     * Returns the request body built from service parameters according to the content type.
      * 
      * @param DataSheetInterface $data
      * @param int $rowNr
      * @return string
      */
-    protected function buildBodyFromParameters(DataSheetInterface $data, int $rowNr) : string
+    protected function buildMethod(DataSheetInterface $data, int $rowNr) : string
+    {
+        $method = $this->getMethod();
+        $placeholders = StringDataType::findPlaceholders($method);
+        if (empty($placeholders) === true) {
+            return $method;
+        }
+        $phValues = $data->getRow($rowNr);
+        $method = StringDataType::replacePlaceholders($method, $phValues);
+        
+        return $method;        
+    }
+    
+    /**
+     * Returns the request body built from service parameters according to the content type.
+     * 
+     * @param DataSheetInterface $data
+     * @param int $rowNr
+     * @param string $method
+     * @return string
+     */
+    protected function buildBodyFromParameters(DataSheetInterface $data, int $rowNr, string $method) : string
     {
         $str = '';
         $contentType = $this->getContentType();
+        $defaultGroup = $this->getDefaultParameterGroup($method);
         switch (true) {
             case stripos($contentType, 'json') !== false:
                 $params = [];
                 foreach ($this->getParameters() as $param) {
-                    if ($param->getGroup($this->getDefaultParameterGroup()) !== self::PARAMETER_GROUP_BODY) {
+                    if ($param->getGroup($defaultGroup) !== self::PARAMETER_GROUP_BODY) {
                         continue;
                     }
                     $name = $param->getName();
@@ -463,7 +484,7 @@ class CallWebService extends AbstractAction implements iCallService
                 break;
             case strcasecmp($contentType, 'application/x-www-form-urlencoded') === 0:
                 foreach ($this->getParameters() as $param) {
-                    if ($param->getGroup($this->getDefaultParameterGroup()) !== self::PARAMETER_GROUP_BODY) {
+                    if ($param->getGroup($defaultGroup) !== self::PARAMETER_GROUP_BODY) {
                         continue;
                     }
                     $name = $param->getName();
@@ -533,7 +554,8 @@ class CallWebService extends AbstractAction implements iCallService
         $httpConnection = $this->getDataConnection();
         $logbook->addLine('Firing HTTP requests for ' . $rowCnt . ' input rows', 1);
         for ($i = 0; $i < $rowCnt; $i++) {
-            $request = new Request($this->getMethod(), $this->buildUrl($input, $i), $this->buildHeaders(), $this->buildBody($input, $i));
+            $method = $this->buildMethod($input, $i);
+            $request = new Request($method, $this->buildUrl($input, $i, $method), $this->buildHeaders(), $this->buildBody($input, $i, $method));
             $query = new Psr7DataQuery($request);
             // Perform the query regularly via URL connector
             try {
@@ -629,17 +651,20 @@ class CallWebService extends AbstractAction implements iCallService
      * 
      * @param DataSheetInterface $data
      * @param int $rowNr
+     * @param string $method
      * @return string
      */
-    protected function buildUrl(DataSheetInterface $data, int $rowNr) : string
+    protected function buildUrl(DataSheetInterface $data, int $rowNr, string $method) : string
     {
         $url = $this->getUrl() ?? '';
         $params = '';
         $urlPlaceholders = StringDataType::findPlaceholders($url);
         
         $urlPhValues = [];
+        $defaultGroup = $this->getDefaultParameterGroup($method);
         foreach ($this->getParameters() as $param) {
-            if ($param->getGroup($this->getDefaultParameterGroup()) !== null && $param->getGroup($this->getDefaultParameterGroup()) !== self::PARAMETER_GROUP_URL) {
+            $group = $param->getGroup($defaultGroup);
+            if ($group !== null && $group !== self::PARAMETER_GROUP_URL) {
                 continue;
             }
             $name = $param->getName();
@@ -927,11 +952,12 @@ class CallWebService extends AbstractAction implements iCallService
     
     /**
      * 
+     * @string $method
      * @return string
      */
-    protected function getDefaultParameterGroup() : string
+    protected function getDefaultParameterGroup(string $method) : string
     {
-        $m = mb_strtoupper($this->getMethod());
+        $m = mb_strtoupper($method);
         return $m === 'GET' || $m === 'OPTIONS' ? self::PARAMETER_GROUP_URL : self::PARAMETER_GROUP_BODY;
     }
 }
