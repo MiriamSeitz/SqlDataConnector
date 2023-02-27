@@ -137,9 +137,14 @@ class CallGraphQLQuery extends CallWebService
         return parent::getMethod('POST');
     }
     
-    protected function buildBody(DataSheetInterface $data, int $rowNr) : string
+    /**
+     * 
+     * {@inheritDoc}
+     * @see \exface\UrlDataConnector\Actions\CallWebService::buildBody()
+     */
+    protected function buildBody(DataSheetInterface $data, int $rowNr, string $method) : string
     {
-        $body = parent::buildBody($data, $rowNr);
+        $body = parent::buildBody($data, $rowNr, $method);
         if ($body === '') {
             $body = $this->buildGqlBody($data, $rowNr);
         }
