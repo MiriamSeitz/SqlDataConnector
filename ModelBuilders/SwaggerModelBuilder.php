@@ -270,7 +270,7 @@ class SwaggerModelBuilder extends AbstractModelBuilder implements ModelBuilderIn
                 $ds->getColumns()->addFromUidAttribute();
                 $ds->getColumns()->addFromExpression('NAME');
                 $ds->getFilters()->addConditionFromString('DATA_ADDRESS_PROPS', '"swagger_component":"' . $refComponent . '"', EXF_COMPARATOR_EQUALS);
-                $ds->getFilters()->addConditionFromString('DATA_SOURCE', $object->getDataSourceId(), EXF_COMPARATOR_EQUALS);
+                $ds->getFilters()->addConditionFromString('DATA_SOURCE', $object->getDataSource()->getId(), EXF_COMPARATOR_EQUALS);
                 $ds->dataRead();
                 
                 if ($ds->countRows() === 1) {
