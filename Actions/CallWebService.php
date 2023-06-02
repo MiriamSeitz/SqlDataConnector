@@ -936,7 +936,7 @@ class CallWebService extends AbstractAction implements iCallService
      */
     public function setErrorCodePattern(string $value) : CallWebService
     {
-        $this->errorMessageCode = $value;
+        $this->errorCodePattern = $value;
         return $this;
     }
     
