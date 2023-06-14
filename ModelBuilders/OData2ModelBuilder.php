@@ -90,6 +90,8 @@ class OData2ModelBuilder extends AbstractModelBuilder implements ModelBuilderInt
             }
         }
         
+        $created_ds->removeRowDuplicates();
+        
         if (! $created_ds->isEmpty()) {
             $created_ds->dataCreate(false, $transaction);
             // Reload object model and recreate the data sheet, so it is based on the refreshed object
