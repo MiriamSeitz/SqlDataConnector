@@ -107,6 +107,17 @@ use exface\Core\DataTypes\LogLevelDataType;
  * 
  * Cookies are disabled by default, but can be stored for logged-in users if `use_cookies`
  * is set to `true`.
+ * 
+ * ## Development and debugging
+ * 
+ * It can be pretty hard to find the right data addresses for responses of external web services.
+ * To help speed things up a bit, there is a `debug` mode, that allows to force the connector
+ * to fake responses and always respond with whatever is defined in `debug_response`. This way 
+ * different situations can be easily simulated without actually connecting to the remote and 
+ * riscing errors, timeouts, etc.
+ * 
+ * You can leave `debug_response` in your config and just change `debug` to quickly switch between
+ * debug mode and normal operation.
  *
  * @author Andrej Kabachnik
  *        
@@ -152,6 +163,10 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
     private $sendRequestIdWithHeader = null;
     
     private $headers = [];
+    
+    private $debug = false;
+    
+    private $debugResponse = null;
     
     // Authentication
     /**
@@ -370,7 +385,16 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
                 }
                 $request = $query->getRequest();
                 $request = $this->prepareRequest($request);
-                $response = $this->getClient()->send($request);
+                
+                if ($this->isDebugMode()) {
+                    $dbg = $this->getDebugResponse();
+                    $dbgHeaders = $dbg->getProperty('headers') ? $dbg->getProperty('headers')->toArray() : [];
+                    $dbgBody = $dbg->getProperty('body') instanceof UxonObject ? $dbg->getProperty('body')->toJson(true) : $dbg->getProperty('body');
+                    $response = new Response($dbg->getProperty('status') ?? '200', $dbgHeaders, $dbgBody);   
+                } else {
+                    $response = $this->getClient()->send($request);
+                }
+                
                 $query->setResponse($response);
             } catch (RequestException $re) {
                 if ($response = $re->getResponse()) {
@@ -1428,6 +1452,57 @@ class HttpConnector extends AbstractUrlConnector implements HttpConnectionInterf
     protected function setHeaders($value) : HttpConnector
     {
         $this->headers = ($value instanceof UxonObject ? $value->toArray() : $value);
+        return $this;
+    }
+    
+    protected function isDebugMode() : bool
+    {
+        return $this->debug === true;
+    }
+    
+    /**
+     * Set to TRUE or FALSE to enable or disable debug mode
+     * 
+     * @uxon-property debug
+     * @uxon-type boolean
+     * @uxon-default false
+     * 
+     * @param bool $trueOrFalse
+     * @return HttpConnector
+     */
+    protected function setDebug(bool $trueOrFalse) : HttpConnector
+    {
+        $this->debug = $trueOrFalse;
+        return $this;
+    }
+    
+    /**
+     * 
+     * @return string|NULL
+     */
+    protected function getDebugResponse() : ?UxonObject
+    {
+        return $this->debugResponse ?? new UxonObject(['status' => '200', 'headers' => [], 'body' => '']);
+    }
+    
+    /**
+     * Specify a static response body to be used in debug mode instead of really querying the URL. 
+     * 
+     * The response body may either be a string or a UXON structure, that will then be automatically converted
+     * to a JSON string.
+     * 
+     * @uxon-property debug_response
+     * @uxon-type object
+     * @uxon-template {"status": "200", "headers": {"Content-Type": "application/json"}, "body": ""}
+     * @uxon-default {"status": "200", "headers": {}, "body": ""}
+     * 
+     * @param UxonObject $value
+     * @throws DataConnectionConfigurationError
+     * @return HttpConnector
+     */
+    protected function setDebugResponse(UxonObject $value) : HttpConnector
+    {
+        $this->debugResponse = $value;
         return $this;
     }
 }
