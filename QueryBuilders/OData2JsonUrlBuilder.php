@@ -139,8 +139,9 @@ class OData2JsonUrlBuilder extends JsonUrlBuilder
             $dataType = $qpart->getDataType();
             switch (true) {
                 case $dataType instanceof TimeDataType:
+                    $colKey = $qpart->getDataAddress();
                     foreach ($rows as $rowNr => $row) {
-                        $val = $row[$qpart->getDataAddress()];
+                        $val = $row[$colKey];
                         $timeParts = [];
                         if (preg_match('/PT(\d{1,2}H)?(\d{1,2}M)?(\d{1,2}S)?/', $val, $timeParts)) {
                             $hours = '00';
