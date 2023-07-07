@@ -30,12 +30,13 @@ use exface\Core\Exceptions\Actions\ActionRuntimeError;
 /**
  * Calls a web service using parameters to fill placeholders in the URL and body of the HTTP request.
  * 
- * This action will send an HTTP request for every row of the input data. The action model allows 
- * to customize common HTTP request properties: `url`, `method`, `body`, `headers`.
+ * This action will send an HTTP request for every row of the input data unless `separate_requests_for_each_row`
+ * is explicitly set to `false`. The action model allows to customize common HTTP request properties: 
+ * `url`, `method`, `body`, `headers`.
  * 
  * The `url` and the `body` can be templates with placeholders. These will be automatically treated as
  * action parameters and will get filled with input data when the action is performed. Placeholders
- * must match column names here! 
+ * must match column names here! This will also not work with `separate_requests_for_each_row:false`!
  * 
  * Alternatively, you can use `parameters` and let the action generate URL params and body automatically. 
  * Parameters are much more flexible than simple placeholders because they can have data types, default
@@ -48,14 +49,14 @@ use exface\Core\Exceptions\Actions\ActionRuntimeError;
  * ## Parameters
  * 
  * Each parameter defines a possible input value of the action. Parameters have unique names and always
- * belong to one of these groups: `url` parameters and `body` parameters. The name of a parameter must
- * match a column name (it is not always the same as an attribute alias!) in the actions input.
+ * belong to one of these groups: `url` parameters or `body` parameters. The name of a parameter must
+ * match a column name in the actions input (it is not always the same as an attribute alias!).
  * 
  * If the `group` of a parameter is ommitted, it will depend on the request method: parameters of 
- * GET-requests are treated as URL-parameters, while POST-parameters will be placed in the body.
+ * GET-requests are treated as URL-parameters, while POST-request parameters will be placed in the body.
  * 
- * In contrast to placehodlers, parameters allow customization like setting a data type, being required
- * and optional, etc.
+ * In contrast to simple placehodlers, parameters allow customization like setting a data type, 
+ * being required and optional, etc.
  * 
  * ## Placeholders
  * 
@@ -239,6 +240,8 @@ class CallWebService extends AbstractAction implements iCallService
     
     const PARAMETER_GROUP_URL = 'url';
     
+    private $separateRequestsPerRow = true;
+    
     /**
      * @var ServiceParameterInterface[]
      */
@@ -352,7 +355,7 @@ class CallWebService extends AbstractAction implements iCallService
 
     /**
      * 
-     * @return array
+     * @return string[]
      */
     protected function getHeaders() : array
     {
@@ -361,7 +364,7 @@ class CallWebService extends AbstractAction implements iCallService
     
     /**
      * 
-     * @return array
+     * @return string[]
      */
     protected function buildHeaders() : array
     {
@@ -544,14 +547,18 @@ class CallWebService extends AbstractAction implements iCallService
         if ($rowCnt === 0 && $this->getInputRowsMin() === 0) {
             $rowCnt = 1;
         }
+        if ($this->hasSeparateRequestsForEachRow() === false) {
+            $rowCnt = 1;
+        }
         
         // Make sure all required parameters are present in the data
         $params = $this->getParameters();
         $logbook->addLine('Found ' . count($params) . ' service parameters. Checking if input data has all required parameters', 1, 0);
         $input = $this->getDataWithParams($input, $params, $logbook);  
         
-        // Call the webservice for every row in the input data.
         $httpConnection = $this->getDataConnection();
+
+        // Call the webservice for every row in the input data.
         $logbook->addLine('Firing HTTP requests for ' . $rowCnt . ' input rows', 1);
         for ($i = 0; $i < $rowCnt; $i++) {
             $method = $this->buildMethod($input, $i);
@@ -959,5 +966,30 @@ class CallWebService extends AbstractAction implements iCallService
     {
         $m = mb_strtoupper($method);
         return $m === 'GET' || $m === 'OPTIONS' ? self::PARAMETER_GROUP_URL : self::PARAMETER_GROUP_BODY;
+    }
+    
+    /**
+     * 
+     * @return bool
+     */
+    protected function hasSeparateRequestsForEachRow() : bool
+    {
+        return $this->separateRequestsPerRow;
+    }
+    
+    /**
+     * Set to FALSE to send a single HTTP request regardless of the number of input data rows
+     * 
+     * @uxon-property separate_requests_for_each_row
+     * @uxon-type boolean
+     * @uxon-default true 
+     * 
+     * @param bool $value
+     * @return CallWebService
+     */
+    protected function setSeparateRequestsForEachRow(bool $value) : CallWebService
+    {
+        $this->separateRequestsPerRow = $value;
+        return $this;
     }
 }

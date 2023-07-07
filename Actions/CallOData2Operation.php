@@ -3,15 +3,10 @@ namespace exface\UrlDataConnector\Actions;
 
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use Psr\Http\Message\ResponseInterface;
-use exface\Core\Factories\ResultFactory;
-use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\Actions\ServiceParameterInterface;
 use exface\Core\Exceptions\Actions\ActionInputMissingError;
-use exface\Core\DataTypes\StringDataType;
-use exface\Core\DataTypes\TimeDataType;
-use exface\Core\DataTypes\DateDataType;
-use exface\Core\DataTypes\TimestampDataType;
 use exface\UrlDataConnector\QueryBuilders\OData2JsonUrlBuilder;
+use exface\Core\Exceptions\Actions\ActionConfigurationError;
 
 /**
  * Calls an OData service operation (FunctionImport).
@@ -24,6 +19,8 @@ use exface\UrlDataConnector\QueryBuilders\OData2JsonUrlBuilder;
 class CallOData2Operation extends CallWebService 
 {
     private $serviceName = null;
+    
+    private $urlParameterForRowData = null;
     
     protected function init()
     {
@@ -39,6 +36,17 @@ class CallOData2Operation extends CallWebService
     protected function buildUrl(DataSheetInterface $data, int $rowNr, string $method) : string
     {
         $url = parent::buildUrl($data, $rowNr, $method);
+        if ($this->hasSeparateRequestsForEachRow() === false) {
+            $urlParam = $this->getUrlParameterForRowData();
+            if ($urlParam === null) {
+                throw new ActionConfigurationError($this, 'Missing action configuration: please set url_parameter_for_row_data to use separate_requests_for_each_row for OData operations (function imports)!');
+            }
+            $rowStrings = [];
+            foreach ($data->getRows() as $i => $row) {
+                $rowStrings[] = parent::buildBodyFromParameters($data, $i, $method);
+            }
+            $url .= (strpos($url, '?') === false ? '?' : '') . "&${$urlParam}='[" . implode(',', $rowStrings) . "]'";
+        }
         return $url . (strpos($url, '?') === false ? '?' : '') . '&$format=json';
     }
     
@@ -133,5 +141,16 @@ class CallOData2Operation extends CallWebService
     protected function getMethod($default = 'GET') : string
     {
         return parent::getMethod('GET');
+    }
+    
+    protected function getUrlParameterForRowData() : string
+    {
+        return $this->urlParameterForRowData;
+    }
+    
+    protected function setUrlParameterForRowData(string $value) : CallOData2Operation
+    {
+        $this->urlParameterForRowData = $value;
+        return $this;
     }
 }
