@@ -143,11 +143,36 @@ class CallOData2Operation extends CallWebService
         return parent::getMethod('GET');
     }
     
+    /**
+     * 
+     * @return string
+     */
     protected function getUrlParameterForRowData() : string
     {
         return $this->urlParameterForRowData;
     }
     
+    /**
+     * Name of the url parameter to hold a JSON with the input row data of the action
+     * 
+     * For example, the below action would produce the following URL: 
+     * `/sap/opu/odata/sap/ZXXX_SRV/myfunc?data='[{"SALESORDER":"90205830","SALESORDERPOSITION":"10"}]'`
+     * 
+     * ```
+     *  {
+     *      "function_import_name": "myfunc",
+     *      "separate_requests_for_each_row": false,
+     *      "url_parameter_for_row_data": "data"
+     *  }
+     *  
+     * ```
+     * 
+     * @uxon-property url_parameter_for_row_data
+     * @uxon-type string
+     * 
+     * @param string $value
+     * @return CallOData2Operation
+     */
     protected function setUrlParameterForRowData(string $value) : CallOData2Operation
     {
         $this->urlParameterForRowData = $value;
