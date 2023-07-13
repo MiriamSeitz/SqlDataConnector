@@ -37,15 +37,13 @@ class CallOData2Operation extends CallWebService
     {
         $url = parent::buildUrl($data, $rowNr, $method);
         if ($this->hasSeparateRequestsForEachRow() === false) {
-            $urlParam = $this->getUrlParameterForRowData();
-            if ($urlParam === null) {
-                throw new ActionConfigurationError($this, 'Missing action configuration: please set url_parameter_for_row_data to use separate_requests_for_each_row for OData operations (function imports)!');
-            }
-            $rowStrings = [];
-            foreach ($data->getRows() as $i => $row) {
-                $rowStrings[] = parent::buildBodyFromParameters($data, $i, $method);
-            }
-            $url .= (strpos($url, '?') === false ? '?' : '') . "&${$urlParam}='[" . implode(',', $rowStrings) . "]'";
+            $paramName = $this->getUrlParameterForRowData();
+            // Remove this special parameter from the URL. Remember, that it will always have an
+            // empty value because of the special treatment in `prepareParamValue()` below.
+            $url = str_replace("&{$paramName}=''", '', $url);
+            $url = str_replace("?{$paramName}=''", '?', $url);
+            // Now add the parameter with the correct data
+            $url .= (strpos($url, '?') === false ? '?' : '') . "&{$paramName}='" . json_encode($data->getRows()) . "'";
         }
         return $url . (strpos($url, '?') === false ? '?' : '') . '&$format=json';
     }
@@ -57,6 +55,16 @@ class CallOData2Operation extends CallWebService
      */
     protected function prepareParamValue(ServiceParameterInterface $parameter, $val)
     {
+        // Make sure to return an empty string for the special row-data parameter as it will
+        // be generated in `buildUrl()` above. We do not have access to the full data here!
+        // Handling this special parameter here is also important to avoid errors if it is
+        // marked as required in the OData metadata.
+        if ($this->hasSeparateRequestsForEachRow() === false) {
+            if ($this->getUrlParameterForRowData() === $parameter->getName()) {
+                return "''";
+            }
+        }
+        
         if ($parameter->hasDefaultValue() === true && $val === null) {
             $val = $parameter->getDefaultValue();
         }
@@ -145,10 +153,14 @@ class CallOData2Operation extends CallWebService
     
     /**
      * 
+     * @throws ActionConfigurationError
      * @return string
      */
     protected function getUrlParameterForRowData() : string
     {
+        if ($this->urlParameterForRowData === null && $this->hasSeparateRequestsForEachRow() === false) {
+            throw new ActionConfigurationError($this, 'Missing action configuration: please set url_parameter_for_row_data to use separate_requests_for_each_row for OData operations (function imports)!');
+        }
         return $this->urlParameterForRowData;
     }
     
@@ -156,7 +168,7 @@ class CallOData2Operation extends CallWebService
      * Name of the url parameter to hold a JSON with the input row data of the action
      * 
      * For example, the below action would produce the following URL: 
-     * `/sap/opu/odata/sap/ZXXX_SRV/myfunc?data='[{"SALESORDER":"90205830","SALESORDERPOSITION":"10"}]'`
+     * `/sap/opu/odata/sap/ZXXX_SRV/myfunc?data='[{"SALESORDER":"90205830","SALESORDERPOSITION":"10"}, {...}]'`
      * 
      * ```
      *  {

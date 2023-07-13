@@ -785,6 +785,21 @@ class CallWebService extends AbstractAction implements iCallService
     
     /**
      * 
+     * @param string $name
+     * @return bool
+     */
+    public function hasParameter(string $name) : bool
+    {
+        foreach ($this->getParameters() as $arg) {
+            if ($arg->getName() === $name) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 
      * {@inheritDoc}
      * @see \exface\Core\Interfaces\Actions\iCallService::getParameter()
      */
