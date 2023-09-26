@@ -25,8 +25,10 @@
 		"symfony/dom-crawler" : "^4.0||^5.0",
 		"symfony/cache" : "^4.0||^5.0",
 		"psr/cache" : "^1.0.1",
-		"kevinrob/guzzle-cache-middleware" : "^2.0||^3.0",
-		"ruflin/elastica" : "^6.1.1"
+		"kevinrob/guzzle-cache-middleware" : "^2.0||^3.0"
+	},
+	"suggest" : {
+		"ruflin/elastica" : "Needed to use the ElasticSearchConnector"
 	},
 	"extra" : {
 		"app" : {
