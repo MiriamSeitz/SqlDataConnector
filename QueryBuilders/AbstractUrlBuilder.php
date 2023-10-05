@@ -812,8 +812,8 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
      * {@inheritDoc}
      * @see \exface\Core\CommonLogic\QueryBuilder\AbstractQueryBuilder::addSorter()
      */
-    public function addSorter($sort_by, $order = 'ASC') {
-        $qpart = parent::addSorter($sort_by, $order);
+    public function addSorter($sort_by, $order = 'ASC', bool $addToAttributes = true) {
+        $qpart = parent::addSorter($sort_by, $order, $addToAttributes);
         $this->prepareSorter($qpart);
         return $qpart;
     }
