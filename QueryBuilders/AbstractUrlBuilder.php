@@ -150,6 +150,9 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
     /**
      * Name of the URL parameter containing the page offset for pagination
      * 
+     * Leave blank to force omitting this URL parameter (e.g. for a service that 
+     * uses pagination automatically)
+     * 
      * @uxon-property request_offset_parameter
      * @uxon-target object
      * @uxon-type string
@@ -166,7 +169,10 @@ abstract class AbstractUrlBuilder extends AbstractQueryBuilder
     const DAP_REQUEST_PAGE_PARAMETER = 'request_page_parameter';
     
     /**
-     * Name of the URL parameter holding the maximum number of returned items
+     * Name of the URL parameter holding the maximum number of returned items.
+     * 
+     * Leave blank to force omitting this URL parameter (e.g. for a service that 
+     * uses pagination automatically)
      * 
      * @uxon-property request_limit_parameter
      * @uxon-target object

@@ -9,7 +9,15 @@ use exface\Core\Exceptions\QueryBuilderException;
 /**
  * This is a query builder for JSON-based oData 4.0 APIs.
  * 
- * See the AbstractUrlBuilder for information about available data address properties.
+ * See the `AbstractUrlBuilder` and `OData2JsonUrlBuilder` for information about available 
+ * data address properties.
+ * 
+ * ## Pagination
+ * 
+ * Remote pagination via `$top` and `$skip` is configured automatically based on the information
+ * in the OData $metadata document. You can also enable it explicitly by setting 
+ * `request_remote_pagination:true` on object level. If you need only `$top` and no `$skip`,
+ * overwrite the undesired option with an empty value: e.g. `request_offset_parameter:`.
  * 
  * @see JsonUrlBuilder for data address syntax
  * @see AbstractUrlBuilder for data source specific parameters
