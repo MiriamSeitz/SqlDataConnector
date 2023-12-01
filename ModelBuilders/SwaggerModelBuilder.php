@@ -320,7 +320,7 @@ class SwaggerModelBuilder extends AbstractModelBuilder implements ModelBuilderIn
      */
     protected function getSwaggerVersion() : string
     {
-        return $this->swagger['swagger'];
+        return $this->getSwagger()['swagger'];
     }
     
     /**
