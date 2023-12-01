@@ -45,6 +45,11 @@ use exface\Core\CommonLogic\QueryBuilder\QueryPartAttribute;
  * - `odata_navigationproperty` - the name of the `<NavigationProperty>` to expand
  * the relation represented by the attribute. If set, the query builder will use
  * `$expand` to get related data instead of separate requests.
+ * - `request_limit_parameter` and `request_offset_parameter` are automatically set to
+ * `$top` and `$skip` if the OData $metadata document states, that the entity is capable
+ * of server-side pagination. If you only need on of them (e.g. only `$top`, but not `$skip`), 
+ * set `request_remote_pagination` to `true` explicitly and overwrite the undesired parameter
+ * with an empty value (e.g. `request_offset_parameter:`).
  *
  * @see AbstractUrlBuilder for data source specific parameters
  * 
@@ -213,6 +218,9 @@ class OData2JsonUrlBuilder extends JsonUrlBuilder
     protected function buildUrlParamOffset(MetaObjectInterface $object)
     {
         $custom_param = parent::buildUrlParamOffset($object);
+        if ($custom_param === '') {
+            return null;
+        }
         return $custom_param ? $custom_param : '$skip';
     }
     
@@ -224,6 +232,9 @@ class OData2JsonUrlBuilder extends JsonUrlBuilder
     protected function buildUrlParamLimit(MetaObjectInterface $object)
     {
         $custom_param = parent::buildUrlParamLimit($object);
+        if ($custom_param === '') {
+            return null;
+        }
         return $custom_param ? $custom_param : '$top';
     }
     
